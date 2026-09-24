@@ -4,7 +4,9 @@ export default {
   id: 'skill',
   title: 'Skill',
   order: 800,
-  view: () => import('./view.jsx'),
+  // 用户明确要求：skill 不呈现在 Web 面板里（CLI 的 skill install / skill get 保持不变）。
+  // 视图文件已删除 —— 声明了 view 却没有文件会让 vite build 直接报错，两边必须同时改。
+  view: null,
   actions: [
     {
       id: 'skill.list',

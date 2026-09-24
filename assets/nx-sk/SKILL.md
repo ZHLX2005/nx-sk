@@ -53,9 +53,9 @@ nx-sk section dump job --json                        # ③ 一个栏目的全部
 
 ```bash
 nx-sk key set OPENAI_KEY sk-xxxxxxxx     # 写入（存在即覆盖，返回 created 告诉你是哪种）
-nx-sk key get OPENAI_KEY                 # 取值，默认打码
-nx-sk key get OPENAI_KEY --reveal         # 显式揭示明文
-nx-sk key list                            # 所有键（值打码）
+nx-sk key get OPENAI_KEY                 # 取值：默认就是原文
+nx-sk key get OPENAI_KEY --mask           # 投屏/截图时才打码
+nx-sk key list                            # 所有键（默认原文）
 nx-sk key remove OPENAI_KEY               # 删除，写前自动留快照
 ```
 
@@ -84,12 +84,16 @@ nx-sk skill get nx-sk --json                   # 四元 JSON：{skillName, ref, 
 ## 什么时候不用
 
 - 用户只是随口问一句、不需要落盘 —— 别动数据。
+- 想找「面板上的 skill 页」—— 没有：**skill 只走 CLI**（`nx-sk skill install` / `nx-sk skill get`），
+  面板里不呈现它。
 - 用户要把密钥**同步到云端/团队** —— nx-sk 只做本机落盘与本地导出，不做上传。
 - 只是要看一眼面板 —— 提示 `nx-sk serve`，别用 CLI 重放一遍。
 
 ## 硬约束（动手前先记住）
 
 - 所有写命令都有 `--dry-run`，先试运行再落盘；删除类命令**自动留快照**在 `~/nx-sk/backup/`。
-- 密文字段在列表/导出里**默认打码**；要明文必须显式 `--reveal`（或导出时 `--with-secrets`）。
-- 把打码后的值（含 `******`）当新值写回去会被拒绝 —— 那通常意味着「不修改」，用 `--unset 字段key` 才是清空。
+- 密文字段**落盘是密文，读出来默认是原文** —— 本机单人工具，自己看的东西不先拦一道。
+  要打码形态（投屏 / 截图）显式加 `--mask`。
+- 把打码后的值（含 `******`）当新值写回去会被拒绝 —— 那通常意味着「不修改」，什么都不传即可。
+- 导出默认**含明文**；要分享出去时加 `--no-secrets`。
 - **绝不把密钥明文打进日志、提交进 git、或写进给第三方的输出里。**

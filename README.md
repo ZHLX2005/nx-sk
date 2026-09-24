@@ -46,7 +46,7 @@ CLI 与 API 同源，skill 驱动 agent**。落到具体功能上：
 | `nx-sk health` | 存活与存储可达性检查 |
 | `nx-sk routes [--module M] [--http "POST /api/entries"]` | 命令 ↔ 路由双向对照 |
 | `nx-sk section list \| get \| add \| update \| remove` | 栏目 CRUD |
-| `nx-sk section dump <id> [--reveal]` | **一个栏目的全部信息**：字段字典 + 全部条目 + 每个条目的未填清单 |
+| `nx-sk section dump <id> [--mask]` | **一个栏目的全部信息**：字段台账 + 全部条目 + 每个条目的未填清单 |
 | `nx-sk section templates` | 内置模板（job / secret） |
 | `nx-sk entry list \| get \| add \| update \| remove` | 条目 CRUD（PATCH 语义） |
 | `nx-sk entry fields [--section job]` | 字段字典 —— 填之前先看这个，别猜字段名 |
@@ -80,16 +80,16 @@ nx-sk section dump job --json                    # ③ 复核：完整度 + 未�
 
 ```bash
 nx-sk key set OPENAI_KEY sk-xxxxxxxx     # 写入：不存在则新建，存在则覆盖
-nx-sk key get OPENAI_KEY                 # 取值，默认打码：sk-x******xxxx
-nx-sk key get OPENAI_KEY --reveal         # 显式揭示明文
-nx-sk key list                            # 所有键（值打码）
+nx-sk key get OPENAI_KEY                 # 取值：默认就是原文
+nx-sk key get OPENAI_KEY --mask           # 投屏/截图时才打码：sk-x******xxxx
+nx-sk key list                            # 所有键（默认原文）
 nx-sk key remove OPENAI_KEY               # 删除，写前自动留快照
 ```
 
 状态与栏目一样：`key *` 只是 `entry *` 的语法糖（同模块、同一批 service 函数），
 作用在 `settings.kvSection` 指向的单字段栏目上（默认 `secret`）。
 
-整体导出（凭据默认打码，`--with-secrets` 才出明文）：
+整体导出（凭据默认**含明文**——本机自己用；要分享给别人时加 `--no-secrets` 打码）：
 
 ```bash
 nx-sk export run --format both --out D:/备份/nx-sk

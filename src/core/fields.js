@@ -109,7 +109,7 @@ const JOB_FIELDS = [
 // 之前做过 8 个字段（服务商/接口地址/模型/用途/有效期/额度/备注），实测是负担——
 // 存一个 key 不该先填一张表。要记「这个 key 干什么用」，把它写进名称里就够。
 const SECRET_FIELDS = [
-  f('value', '密钥值', 'secret', 'key', { hint: 'API Key 本身。密文落盘；列表与导出默认只显示首尾' }),
+  f('value', '密钥值', 'secret', 'key', { hint: 'API Key 本身。落盘是密文，读出来默认是原文（--mask 才打码）' }),
 ];
 
 const TEMPLATES = {

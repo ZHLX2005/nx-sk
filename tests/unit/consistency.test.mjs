@@ -102,6 +102,20 @@ test('key 系列是 entry 的语法糖，不构成第二套业务逻辑', () => 
   assert.equal(http('key.set')[0], 'PUT');
 });
 
+test('skill 命令必须一直在 CLI 里（撤掉面板 ≠ 撤掉功能）', () => {
+  // 用户要求 skill 不呈现在面板里。这是「去掉一个视图」，不是「去掉两条命令」——
+  // 而这两条是骨架的强制命令面（让 agent 学会用 / 让外部 agent 拿上下文），
+  // 手滑一起删掉的话，面板上看不出任何异常。
+  for (const id of ['skill.list', 'skill.install', 'skill.get']) {
+    const a = ACTIONS.find((x) => x.id === id);
+    assert.ok(a, `${id} 不存在`);
+    assert.ok(cliPathsOf(a).length, `${id} 缺 CLI 命令`);
+  }
+  const skill = MODULES.find((m) => m.id === 'skill');
+  assert.equal(skill.view, null, 'skill 按用户要求不呈现在 Web 面板');
+  assert.equal(VIEWS.some((v) => v.id === 'skill'), false, 'VIEWS 里不该再有 skill');
+});
+
 test('非资源模块没有被硬套成 CRUD', () => {
   for (const m of MODULES.filter((x) => !x.resource)) {
     const verbs = m.actions.map((a) => a.id.split('.').slice(1).join('.'));

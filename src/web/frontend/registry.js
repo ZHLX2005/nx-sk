@@ -11,7 +11,6 @@ export const VIEWS = [
   { id: 'sections', title: '栏目', order: 500, component: lazy(() => import('../../modules/sections/view.jsx')) },
   { id: 'entries', title: '条目', order: 600, tab: false, component: lazy(() => import('../../modules/entries/view.jsx')) },
   { id: 'export', title: '导出', order: 700, component: lazy(() => import('../../modules/export/view.jsx')) },
-  { id: 'skill', title: 'Skill', order: 800, component: lazy(() => import('../../modules/skill/view.jsx')) },
   { id: 'settings', title: '设置', order: 900, component: lazy(() => import('../../modules/settings/view.jsx')) },
 ];
 

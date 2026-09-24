@@ -29,10 +29,10 @@ async function plainValues(section, values) {
   return out;
 }
 
-function displayValues(section, values, decrypt) {
+function displayValues(section, values, decrypt, mask = false) {
   const out = {};
   for (const [k, v] of Object.entries(values)) {
-    out[k] = isSensitiveField(section, k) ? displaySensitive(v, { decrypt }) : v;
+    out[k] = isSensitiveField(section, k) ? displaySensitive(v, { mask, decrypt }) : v;
   }
   return out;
 }
@@ -43,7 +43,7 @@ function renderBundleMarkdown(bundle) {
   lines.push('');
   lines.push(`导出时间：${bundle.generatedAt}`);
   lines.push(`栏目数：${bundle.sections.length}　条目数：${bundle.entries.length}`);
-  lines.push(`密文字段：${bundle.withSecrets ? '**含明文**（请妥善保管）' : '已打码'}`);
+  lines.push(`密文字段：${bundle.withSecrets ? '含明文' : '已打码'}`);
   lines.push('');
   for (const section of bundle.sections) {
     lines.push(`## ${section.title}（${section.id}）`);
@@ -84,7 +84,8 @@ export async function exportAll({ out, format, withSecrets, section, 'dry-run': 
   const ids = new Set(sections.map((s) => s.id));
   const entries = store.entries.filter((e) => ids.has(e.section));
 
-  const reveal = withSecrets === undefined ? !!settings.includeSecretsInExport : !!withSecrets;
+  // 默认取设置；现在默认就是**含明文**（本机单人工具，自己看的东西不必先拦一道）
+  const includeSecrets = withSecrets === undefined ? !!settings.includeSecretsInExport : !!withSecrets;
   const dir = out ? resolve(out) : (settings.exportDir ? resolve(settings.exportDir) : exportDir());
   const generatedAt = nowIso();
   const base = `${stamp()}-nx-sk`;
@@ -94,7 +95,7 @@ export async function exportAll({ out, format, withSecrets, section, 'dry-run': 
     version: VERSION,
     generatedAt,
     storePath: displayPath(storePathInUse()),
-    withSecrets: reveal,
+    withSecrets: includeSecrets,
     counts: { sections: sections.length, entries: entries.length },
     sections: sections.map((s) => ({
       id: s.id, title: s.title, description: s.description, titleLabel: s.titleLabel,
@@ -106,8 +107,8 @@ export async function exportAll({ out, format, withSecrets, section, 'dry-run': 
   for (const e of entries) {
     const sec = sections.find((s) => s.id === e.section);
     const decrypt = await sensitiveViewer(sec, [e]);
-    const values = reveal ? await plainValues(sec, e.values) : displayValues(sec, e.values, decrypt);
-    const meta = dumpSection(sec, [e], { reveal, decrypt }).entries[0];
+    const values = includeSecrets ? await plainValues(sec, e.values) : displayValues(sec, e.values, decrypt, true);
+    const meta = dumpSection(sec, [e], { mask: !includeSecrets, decrypt }).entries[0];
     bundle.entries.push({ id: e.id, section: e.section, sectionTitle: sec.title, title: e.title, tags: e.tags, createdAt: e.createdAt, updatedAt: e.updatedAt, completeness: meta.completeness, values });
   }
 
@@ -118,7 +119,7 @@ export async function exportAll({ out, format, withSecrets, section, 'dry-run': 
   if (dryRun) {
     return {
       status: 'skipped', dryRun: true,
-      wouldWrite: { dir: displayPath(dir), files: files.map((f) => ({ name: f.name, bytes: Buffer.byteLength(f.content) })), withSecrets: reveal, sections: sections.length, entries: entries.length },
+      wouldWrite: { dir: displayPath(dir), files: files.map((f) => ({ name: f.name, bytes: Buffer.byteLength(f.content) })), withSecrets: includeSecrets, sections: sections.length, entries: entries.length },
     };
   }
 
@@ -132,14 +133,14 @@ export async function exportAll({ out, format, withSecrets, section, 'dry-run': 
 
   await mutateStore((s) => {
     s.exports.unshift({
-      at: generatedAt, dir: displayPath(dir), dirRaw: dir, format: fmt, withSecrets: reveal,
+      at: generatedAt, dir: displayPath(dir), dirRaw: dir, format: fmt, withSecrets: includeSecrets,
       sections: sections.length, entries: entries.length,
       files: written.map((w) => ({ path: w.path, pathRaw: w.pathRaw })),
     });
     s.exports = s.exports.slice(0, MAX_EXPORT_HISTORY);
   });
 
-  return { status: 'ok', dir: displayPath(dir), dirRaw: dir, format: fmt, withSecrets: reveal, sections: sections.length, entries: entries.length, files: written };
+  return { status: 'ok', dir: displayPath(dir), dirRaw: dir, format: fmt, withSecrets: includeSecrets, sections: sections.length, entries: entries.length, files: written };
 }
 
 export async function listExports() {
@@ -171,7 +172,7 @@ export function renderExport(d) {
   }
   const lines = [
     `已导出 ${d.sections} 个栏目 / ${d.entries} 条条目 → ${d.dir}`,
-    `格式: ${d.format}　凭据: ${d.withSecrets ? '**含明文**（注意存放位置）' : '已打码'}`,
+    `格式: ${d.format}　凭据: ${d.withSecrets ? '含明文' : '已打码'}`,
   ];
   for (const f of d.files) lines.push(`  ${f.path}　${f.bytes} 字节`);
   return lines.join('\n');

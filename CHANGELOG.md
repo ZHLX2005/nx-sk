@@ -6,6 +6,14 @@
 
 ### Changed
 
+- **【破坏性】密文字段默认原文显示**，打码改成显式选项：
+  `--reveal` 全部换成 `--mask`（`key get/list`、`entry get`、`section dump`、`GET /api/keys?mask=1`）；
+  导出默认也含明文（`settings.includeSecretsInExport` 默认 `true`，要打码加 `--no-secrets`）。
+  理由：本机单人工具，数据是给自己看的，默认打码等于每次先拦自己一道。
+  **落盘仍然是 AES-256-GCM 密文**——「store.json 泄露」不等于「凭据泄露」这一点没变。
+  面板里的勾选框从「显示密文字段明文」翻成「打码显示（投屏/截图时用）」，默认不勾。
+- **【破坏性】skill 不再出现在 Web 面板**：删掉 Skill tab 与它的视图；`skill install` / `skill get`
+  仍完整保留在 CLI（用户明确要求，偏离了骨架 ref「三条最高优先级命令要有 Web 入口」的建议）。
 - **【破坏性】密钥栏目从 8 字段缩成极简 KV**：只保留「名称（条目名）→ 值」。
   删掉了服务商 / 接口地址 / 模型 / 用途 / 有效期 / 额度 / 备注 ——
   存一个 key 不该先填一张表；「这个 key 干什么用」写进键名里就够了。

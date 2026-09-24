@@ -1,5 +1,6 @@
 // 条目（entry）：栏目下的一条记录。
-// 写敏感字段时加密、读时按 reveal 打码——**这条边界只在这里实现一次**，两端共用。
+// 写敏感字段时加密、读时**默认原文**（只有显式 --mask 才打码）——
+// 这条边界只在这里实现一次，两端共用。
 //
 // 写入分两趟：趟 A（异步，在草稿 section 上跑）解析字段、加密敏感值；
 // 趟 B（同步，在 mutateStore 事务里）只做赋值。这样加密只发生在事务外，
@@ -171,13 +172,13 @@ export async function listEntries({ section, q } = {}) {
   return { count: out.length, total: store.entries.length, entries: out };
 }
 
-export async function getEntry(ref, { reveal, section } = {}) {
+export async function getEntry(ref, { mask, section } = {}) {
   const store = await loadStore();
   const entry = resolveEntry(store, ref, section);
   const sec = store.sections.find((s) => s.id === entry.section);
   if (!sec) throw notFound(`条目 ${entry.id} 指向的栏目已不存在: ${entry.section}`);
   const decrypt = await sensitiveViewer(sec, [entry]);
-  return { ...serializeEntry(sec, entry, { reveal: !!reveal, decrypt }), sectionTitle: sec.title, reveal: !!reveal };
+  return { ...serializeEntry(sec, entry, { mask: !!mask, decrypt }), sectionTitle: sec.title, mask: !!mask };
 }
 
 export async function addEntry({ section, title, set, data, tags, 'dry-run': dryRun } = {}) {
@@ -335,7 +336,7 @@ function assertKeyName(name) {
   return s;
 }
 
-export async function keyList({ reveal } = {}) {
+export async function keyList({ mask } = {}) {
   const store = await loadStore();
   const { sec, valueKey } = await kvTarget(store);
   const mine = store.entries.filter((e) => e.section === sec.id);
@@ -344,18 +345,18 @@ export async function keyList({ reveal } = {}) {
     section: sec.id,
     sectionTitle: sec.title,
     valueKey,
-    reveal: !!reveal,
+    mask: !!mask,
     count: mine.length,
     keys: mine.map((e) => ({
       id: e.id,
       name: e.title,
-      value: displaySensitive(e.values?.[valueKey], { reveal: !!reveal, decrypt }),
+      value: displaySensitive(e.values?.[valueKey], { mask: !!mask, decrypt }),
       updatedAt: e.updatedAt,
     })),
   };
 }
 
-export async function keyGet(name, { reveal } = {}) {
+export async function keyGet(name, { mask } = {}) {
   const store = await loadStore();
   const { sec, valueKey } = await kvTarget(store);
   const key = assertKeyName(name);
@@ -366,8 +367,8 @@ export async function keyGet(name, { reveal } = {}) {
     id: entry.id,
     name: entry.title,
     section: sec.id,
-    value: displaySensitive(entry.values?.[valueKey], { reveal: !!reveal, decrypt }),
-    reveal: !!reveal,
+    value: displaySensitive(entry.values?.[valueKey], { mask: !!mask, decrypt }),
+    mask: !!mask,
     updatedAt: entry.updatedAt,
   };
 }
@@ -420,21 +421,21 @@ export async function keyRemove(name, { 'dry-run': dryRun } = {}) {
 
 // —— CLI 人读渲染（KV 系列） ——
 export function renderKeyList(d) {
-  const lines = [`${d.count} 个密钥 · 栏目 ${d.section}${d.reveal ? ' · 含明文' : ' · 值已打码'}`];
+  const lines = [`${d.count} 个密钥 · 栏目 ${d.section}${d.mask ? ' · 已打码' : ''}`];
   for (const k of d.keys) lines.push(`  ${String(k.name).padEnd(24)} ${k.value}`);
-  lines.push('', `取值: nx-sk key get <名称> --reveal　　写入: nx-sk key set <名称> <值>`);
+  lines.push('', `取值: nx-sk key get <名称>　　写入: nx-sk key set <名称> <值>　　（要打码加 --mask）`);
   return lines.join('\n');
 }
 
 export function renderKeyGet(d) {
-  return `${d.name} = ${d.value}${d.reveal ? '' : '\n（值已打码；加 --reveal 看明文）'}`;
+  return `${d.name} = ${d.value}${d.mask ? '\n（已打码显示；去掉 --mask 即原文）' : ''}`;
 }
 
 export function renderKeySet(d) {
   if (d.status === 'skipped' && d.unchanged) return `未改动：${d.name} 的值与现有值相同`;
   if (d.status === 'skipped') return `试运行（未落盘）：${JSON.stringify(d.wouldCreate || d.wouldChange)}`;
   return `${d.created ? '已新建' : '已覆盖'}密钥 ${d.name}（栏目 ${d.section}）`
-    + `${d.snapshot ? `\n快照: ${d.snapshot}` : ''}\n值已密文落盘；核对用 nx-sk key get ${d.name} --reveal`;
+    + `${d.snapshot ? `\n快照: ${d.snapshot}` : ''}\n值已密文落盘；核对用 nx-sk key get ${d.name}`;
 }
 
 export function renderKeyRemove(d) {
@@ -442,10 +443,10 @@ export function renderKeyRemove(d) {
   return `已删除密钥 ${d.removed.title}\n快照: ${d.snapshot}`;
 }
 
-function maskAll(section, entry, decrypt) {
+function maskAll(section, entry, decrypt, mask) {
   const out = {};
   for (const [k, v] of Object.entries(entry.values)) {
-    out[k] = isSensitiveField(section, k) ? displaySensitive(v, { decrypt }) : v;
+    out[k] = isSensitiveField(section, k) ? displaySensitive(v, { mask, decrypt }) : v;
   }
   return out;
 }
@@ -465,7 +466,7 @@ export function renderEntryList(d) {
 export function renderEntryGet(d) {
   const lines = [
     `${d.title || d.id}（${d.id}）· 栏目 ${d.section} · 完整度 ${d.completeness.filled}/${d.completeness.total} = ${d.completeness.ratio}%`
-    + `${d.reveal ? ' · 含明文' : ' · 敏感字段已打码'}`,
+    + `${d.mask ? ' · 已打码' : ''}`,
   ];
   for (const [k, v] of Object.entries(d.values)) {
     if (v === null) continue;

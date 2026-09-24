@@ -10,13 +10,13 @@ export default {
       id: 'export.run',
       cli: ['export', 'run'],
       http: ['POST', '/api/export'],
-      summary: '把全部（或单个）栏目导出成 JSON / Markdown；凭据默认打码，--with-secrets 才出明文',
+      summary: '把全部（或单个）栏目导出成 JSON / Markdown；凭据默认含明文，--no-secrets 打码',
       flags: {
         out: { type: 'string', hint: '导出目录，缺省 ~/nx-sk/export' },
         format: { type: 'string', enum: ['json', 'md', 'both'], hint: '缺省取设置里的 exportFormat' },
         section: { type: 'string', hint: '只导出某个栏目' },
-        'with-secrets': { type: 'boolean', hint: '包含密钥明文字段（谨慎）' },
-        'no-secrets': { type: 'boolean', hint: '强制不带密钥明文' },
+        'with-secrets': { type: 'boolean', hint: '含密钥明文字段（这是默认）' },
+        'no-secrets': { type: 'boolean', hint: '打码后再导出（要分享给别人时用）' },
         'dry-run': { type: 'boolean' },
       },
       run: (ctx) => service.exportAll({

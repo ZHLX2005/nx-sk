@@ -1,7 +1,7 @@
 // action 规格：校验 / 强转 / 路由编译 / 用法串。
 //
 // 为什么 flag 要随 action 声明、而不是用全局白名单：
-// `entry update --reveal x` 里 `--reveal` 是布尔型（不取值），全局白名单猜不出来；
+// `entry update --mask x` 里 `--mask` 是布尔型（不取值），全局白名单猜不出来；
 // 只有 action 自己知道。同理 `type:'number'` 让两端都得到数字，不必各写一遍 parseInt。
 import { readFileSync } from 'node:fs';
 import { APP_NAME } from '../core/paths.js';
@@ -25,7 +25,7 @@ export function flagSpecsOf(action) {
   return Object.entries(action.flags || {}).map(([name, spec]) => ({ name, type: 'string', required: false, ...spec }));
 }
 
-/** 用法串：`nx-sk entry update <id> [--section <section>] [--reveal]` */
+/** 用法串：`nx-sk entry update <id> [--section <section>] [--mask]` */
 export function usageOf(action) {
   const paths = cliPathsOf(action);
   const parts = [APP_NAME, ...(paths[0] || [action.id])];

@@ -90,11 +90,6 @@ export default function SettingsView() {
             <span className="desc">面板本身就是 serve 提供的；改代码后重启它即可</span>
             <span className="acts"><Copyable className="mono" text={`nx-sk serve --port ${panelPort}`}>{`nx-sk serve --port ${panelPort}`}</Copyable></span>
           </div>
-          <div className="row">
-            <span className="name">让 agent 学会用</span>
-            <span className="desc">装到 ~/.claude/skills，或用 skill get 直接取上下文</span>
-            <span className="acts"><Copyable className="mono" text="nx-sk skill install">nx-sk skill install</Copyable></span>
-          </div>
         </div>
       </div>
 
@@ -125,11 +120,11 @@ export default function SettingsView() {
               <div className="fctrl"><input value={form.kvSection} onChange={(e) => setForm({ ...form, kvSection: e.target.value })} placeholder="secret" /></div>
             </div>
             <div className="field">
-              <div className="flabel"><span>导出默认带明文密钥</span></div>
+              <div className="flabel"><span>导出默认带明文密钥</span><span className="fkey">默认开；要分享出去时关掉</span></div>
               <div className="fctrl">
                 <label className="inline">
                   <input type="checkbox" checked={!!form.includeSecretsInExport} onChange={(e) => setForm({ ...form, includeSecretsInExport: e.target.checked })} />
-                  <span className={form.includeSecretsInExport ? 'bad' : 'muted'}>{form.includeSecretsInExport ? '开（导出的文件会含真实凭据）' : '关（凭据打码）'}</span>
+                  <span className={form.includeSecretsInExport ? 'muted' : 'bad'}>{form.includeSecretsInExport ? '开（导出文件含真实凭据，注意别外发）' : '关（凭据打码后再导出）'}</span>
                 </label>
               </div>
             </div>

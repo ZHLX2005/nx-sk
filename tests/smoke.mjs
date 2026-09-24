@@ -141,17 +141,17 @@ step('key set 同值幂等（status=skipped，不重写密文）', set2.status =
 const set3 = await cliJson(['key', 'set', 'SMOKE_KEY', 'sk-smoke-NEW-0987654321fedcba']);
 step('key set 是覆盖语义（KV 的 SET）', set3.status === 'ok' && set3.created === false && set3.replaced === true);
 
-const masked = await cliJson(['key', 'get', 'SMOKE_KEY']);
-step('key get 默认打码', masked.value === 'sk-s******dcba', masked.value);
-step('打码结果里读不到明文', !JSON.stringify(masked).includes('0987654321fedcba'));
+const shown = await cliJson(['key', 'get', 'SMOKE_KEY']);
+step('key get 默认给原文（本机自己用，不拦自己）', shown.value === 'sk-smoke-NEW-0987654321fedcba');
 
-const reveal = await cliJson(['key', 'get', 'SMOKE_KEY', '--reveal']);
-step('key get --reveal 才给明文', reveal.value === 'sk-smoke-NEW-0987654321fedcba');
+const maskedOut = await cliJson(['key', 'get', 'SMOKE_KEY', '--mask']);
+step('key get --mask 才打码', maskedOut.value === 'sk-s******dcba', maskedOut.value);
+step('打码结果里读不到明文', !JSON.stringify(maskedOut).includes('0987654321fedcba'));
 
 const keyList = await cliJson(['key', 'list']);
-step('key list 列出键，值打码', keyList.count === 1 && keyList.keys[0].name === 'SMOKE_KEY' && !keyList.keys[0].value.includes('0987654321'));
-const keyListReveal = await cliJson(['key', 'list', '--reveal']);
-step('key list --reveal 给明文', keyListReveal.keys[0].value === 'sk-smoke-NEW-0987654321fedcba');
+step('key list 默认给原文', keyList.count === 1 && keyList.keys[0].value === 'sk-smoke-NEW-0987654321fedcba');
+const keyListMasked = await cliJson(['key', 'list', '--mask']);
+step('key list --mask 打码', keyListMasked.keys[0].value === 'sk-s******dcba');
 
 const raw = await readFile(join(home, 'store.json'), 'utf8');
 step('store.json 里没有密钥明文', !raw.includes('sk-smoke'), '只有 AES-GCM 密文对象');
@@ -161,9 +161,9 @@ const refuseMask = await cliError(['key', 'set', 'SMOKE_KEY', 'sk-x******zzzz'])
 step('拒绝把打码串当新密钥写回', refuseMask.error.includes('打码'));
 
 const keepMask = await cliJson(['key', 'set', 'SMOKE_KEY', 'sk-s******dcba']);
-step('面板原样回传掩码时保留原密文（不把掩码存成新值）', keepMask.status === 'skipped' && keepMask.unchanged === true);
-const keepMaskGet = await cliJson(['key', 'get', 'SMOKE_KEY', '--reveal']);
-step('掩码回传后明文仍是原值', keepMaskGet.value === 'sk-smoke-NEW-0987654321fedcba');
+step('写入「当前值的掩码」视为未改动（不把掩码存成新值）', keepMask.status === 'skipped' && keepMask.unchanged === true);
+const keepMaskGet = await cliJson(['key', 'get', 'SMOKE_KEY']);
+step('明文仍是原值', keepMaskGet.value === 'sk-smoke-NEW-0987654321fedcba');
 
 const missKey = await cliError(['key', 'get', 'NO_SUCH_KEY']);
 step('不存在的密钥报 NOT_FOUND', missKey.code === 'NOT_FOUND');
@@ -183,16 +183,20 @@ const dryExport = await cliJson(['export', 'run', '--dry-run']);
 step('export --dry-run 只报计划', dryExport.status === 'skipped' && dryExport.wouldWrite.files.length === 2);
 
 const exported = await cliJson(['export', 'run', '--out', join(home, 'out')]);
-step('export 真写了文件', exported.files.length === 2 && exported.withSecrets === false);
+step('export 真写了文件', exported.files.length === 2 && exported.withSecrets === true, '默认含明文');
 const mdPath = exported.files.find((f) => f.kind === 'md').pathRaw;
 const jsonPath = exported.files.find((f) => f.kind === 'json').pathRaw;
 const md = await readFile(mdPath, 'utf8');
-step('Markdown 导出里凭据是打码的', !md.includes('sk-smoke-1234567890') && md.includes('冒烟测试'));
-const jsonExp = await readFile(jsonPath, 'utf8');
-step('JSON 导出标了 withSecrets', JSON.parse(jsonExp).withSecrets === false);
+step('导出默认含密钥明文（自己用，不拦）', md.includes('sk-smoke-NEW-0987654321fedcba') && md.includes('冒烟测试'));
+step('JSON 导出标了 withSecrets', JSON.parse(await readFile(jsonPath, 'utf8')).withSecrets === true);
+
+const maskedExport = await cliJson(['export', 'run', '--out', join(home, 'out-masked'), '--no-secrets']);
+step('--no-secrets 导出时凭据打码', maskedExport.withSecrets === false);
+const mdMasked = await readFile(maskedExport.files.find((f) => f.kind === 'md').pathRaw, 'utf8');
+step('打码版导出里读不到明文', !mdMasked.includes('sk-smoke-NEW'));
 
 const exportList = await cliJson(['export', 'list']);
-step('export list 给出历史与目录内文件', exportList.history.length >= 1 && exportList.disk.length === 2);
+step('export list 给出历史与目录内文件', exportList.history.length >= 2 && exportList.disk.length >= 2);
 
 const skillGet = await cliJson(['skill', 'get', 'nx-sk', '10-sections-entries', '--dry-run']);
 step('skill get --json 是四元', skillGet.skillName === 'nx-sk' && skillGet.ref === 'references/10-sections-entries.md'
@@ -254,10 +258,10 @@ const apiKeyPut = await j('/api/keys/HTTP_KEY', { method: 'PUT', body: { value: 
 step('PUT /api/keys/:name 写入密钥', apiKeyPut.status === 200 && apiKeyPut.body.data.created === true);
 
 const apiKeyGet = await j('/api/keys/HTTP_KEY');
-step('GET /api/keys/:name 默认打码', apiKeyGet.status === 200 && apiKeyGet.body.data.value === 'sk-h******klmn', apiKeyGet.body.data.value);
+step('GET /api/keys/:name 默认给原文', apiKeyGet.status === 200 && apiKeyGet.body.data.value === 'sk-http-abcdefghijklmn', apiKeyGet.body.data.value);
 
-const apiKeyGetReveal = await j('/api/keys/HTTP_KEY?reveal=1');
-step('GET /api/keys/:name?reveal=1 给明文', apiKeyGetReveal.body.data.value === 'sk-http-abcdefghijklmn');
+const apiKeyGetMasked = await j('/api/keys/HTTP_KEY?mask=1');
+step('GET /api/keys/:name?mask=1 打码', apiKeyGetMasked.body.data.value === 'sk-h******klmn');
 
 const apiKeyList = await j('/api/keys');
 step('GET /api/keys 列表', apiKeyList.status === 200 && apiKeyList.body.data.keys.some((k) => k.name === 'HTTP_KEY'));

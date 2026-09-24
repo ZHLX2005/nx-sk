@@ -18,13 +18,13 @@ export default function SectionView({ sectionId }) {
   const [draft, setDraft] = useState(null);
   const [modal, setModal] = useState(null);
   const [quick, setQuick] = useState('');
-  const reveal = !!ui.reveal;
+  const mask = !!ui.mask;
 
   const load = useCallback(async (keepId) => {
     setBusy(true);
     setErr(null);
     try {
-      const d = await api(`/api/sections/${encodeURIComponent(sectionId)}/dump${reveal ? '?reveal=1' : ''}`);
+      const d = await api(`/api/sections/${encodeURIComponent(sectionId)}/dump${mask ? '?mask=1' : ''}`);
       setData(d);
       const wanted = keepId || ui.entry;
       const hit = d.entries.find((e) => e.id === wanted) || d.entries[0] || null;
@@ -38,7 +38,7 @@ export default function SectionView({ sectionId }) {
       setBusy(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sectionId, reveal]);
+  }, [sectionId, mask]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -137,8 +137,8 @@ export default function SectionView({ sectionId }) {
         <span className="muted">{data.count} 条 / {data.section.fields} 字段</span>
         {data.section.description ? <span className="desc muted nowrap grow">{data.section.description}</span> : <span className="grow" />}
         <label className="inline hint">
-          <input type="checkbox" checked={reveal} onChange={() => patchUi({ reveal: !reveal })} />
-          显示密文字段明文
+          <input type="checkbox" checked={mask} onChange={() => patchUi({ mask: !mask })} />
+          打码显示（投屏/截图时用）
         </label>
         <button className="btn small ghost" onClick={() => load()}>刷新</button>
         <button className="btn small ghost" onClick={exportSection}>导出本栏目</button>

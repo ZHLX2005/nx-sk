@@ -8,7 +8,7 @@ export const DEFAULT_UI = {
   view: 'job', // 当前 tab
   entry: '', // 各栏目选中的条目
   q: '', // 搜索词
-  reveal: false, // 是否显示密文字段明文
+  mask: false, // 打码显示密文字段（默认原文；投屏时勾上）
 };
 
 function loadUi() {

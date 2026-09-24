@@ -199,16 +199,16 @@ export async function removeSection(ref, { force, 'dry-run': dryRun } = {}) {
 }
 
 /** 一个栏目的**全部信息**：字段字典 + 所有条目 + 未填清单。 */
-export async function dump(ref, { reveal } = {}) {
+export async function dump(ref, { mask } = {}) {
   const store = await loadStore();
   const s = mustFind(store, ref);
   const mine = store.entries.filter((e) => e.section === s.id);
   const decrypt = await sensitiveViewer(s, mine);
-  const data = dumpSection(s, store.entries, { reveal: !!reveal, decrypt });
+  const data = dumpSection(s, store.entries, { mask: !!mask, decrypt });
   return {
     ...data,
     generatedAt: nowIso(),
-    reveal: !!reveal,
+    mask: !!mask,
     groupIndex: groupFields(s.fields).map((g) => ({
       id: g.id,
       title: s.groups.find((x) => x.id === g.id)?.title || g.id,
@@ -254,7 +254,7 @@ export function renderSectionGet(d) {
 export function renderSectionDump(d) {
   const groupTitle = (id) => (d.groups.find((x) => x.id === id)?.title) || id;
   const lines = [
-    `栏目 ${d.section.id} · ${d.section.title}　${d.count} 条条目 · ${d.section.fields} 字段${d.reveal ? ' · 含明文' : ' · 敏感字段已打码'}`,
+    `栏目 ${d.section.id} · ${d.section.title}　${d.count} 条条目 · ${d.section.fields} 字段${d.mask ? ' · 已打码' : ''}`,
     d.section.description,
   ];
   for (const e of d.entries) {
@@ -272,7 +272,13 @@ export function renderSectionDump(d) {
 
 export function renderSectionChange(d) {
   if (d.status === 'skipped') return `试运行（未落盘）：${JSON.stringify(d.wouldCreate || d.wouldChange || d.wouldRemove)}`;
-  if (d.removed) return `已删除栏目 ${d.removed.id}（连带 ${d.removed.entries} 条条目）\n快照: ${d.snapshot}`;
+  // `removed` 在两条路径上形状不同：remove 给的是**对象** {id,title,entries}，
+  // update 给的是**被删字段 key 的数组**。数组恒为真值，所以必须显式排除数组——
+  // 否则 `section update` 会打印「已删除栏目 undefined」，
+  // 而 `.entries` 还会取到 Array.prototype.entries 变成 `function entries() { [native code] }`。
+  if (d.removed && !Array.isArray(d.removed)) {
+    return `已删除栏目 ${d.removed.id}（连带 ${d.removed.entries} 条条目）\n快照: ${d.snapshot}`;
+  }
   if (d.created) return `已创建栏目 ${d.section.id} · ${d.section.title}（${d.section.fields} 字段）\n快照: ${d.snapshot}`;
   const extra = [d.added?.length ? `新增字段 ${d.added.join(', ')}` : '', d.removed?.length ? `删除字段 ${d.removed.join(', ')}` : ''].filter(Boolean).join('；');
   return `已更新栏目 ${d.id}：${d.changed.join(', ')}${extra ? `\n${extra}` : ''}\n快照: ${d.snapshot}`;

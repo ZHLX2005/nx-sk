@@ -19,22 +19,23 @@
 
 ```bash
 nx-sk key set OPENAI_KEY sk-xxxxxxxx            # 写入：不存在则新建，存在则覆盖
-nx-sk key get OPENAI_KEY --reveal               # 取值（不给 --reveal 就是打码）
-nx-sk key list                                  # 列出所有键（值打码）
+nx-sk key get OPENAI_KEY                        # 取值：默认就是原文
+nx-sk key get OPENAI_KEY --mask                  # 投屏/截图时才打码
+nx-sk key list                                  # 列出所有键（默认原文）
 nx-sk key remove OPENAI_KEY                     # 删除（删前自动留快照）
 ```
 
 | 命令 | 接口 | 说明 |
 | --- | --- | --- |
-| `key list [--reveal]` | `GET /api/keys[?reveal=1]` | 全部键，按写入顺序 |
-| `key get <名称> [--reveal]` | `GET /api/keys/:name[?reveal=1]` | 单个键的值 |
+| `key list [--mask]` | `GET /api/keys[?mask=1]` | 全部键，按写入顺序 |
+| `key get <名称> [--mask]` | `GET /api/keys/:name[?mask=1]` | 单个键的值 |
 | `key set <名称> <值>` | `PUT /api/keys/:name` | **SET 语义**：存在即覆盖 |
 | `key remove <名称>` | `DELETE /api/keys/:name` | 不存在报 `NOT_FOUND`；写前留快照 |
 
 ### 与 `entry` 的关系（重要）
 
 `key *` **不是第二套实现**，是 `entry *` 的语法糖：它把「哪个栏目 + 哪个值字段」定好，
-再调同一批 service 函数。所以加解密、打码、快照、`--dry-run` 只有一份实现，不可能分叉。
+再调同一批 service 函数。所以加解密、快照、`--dry-run` 只有一份实现，不可能分叉。
 
 等价关系：
 
@@ -74,7 +75,25 @@ nx-sk setting set --key kvSection --value mykeys
 ```
 
 - `kid` 是**密钥指纹**（密钥 sha256 前 12 位）。换过密钥来源时给出明确报错，而不是解出乱码。
-- 打码规则：长度 ≤ 10 全部打码；否则前 4 + `******` + 后 4。
+
+### 读出来是原文，落盘才是密文
+
+**默认原文**：本机单人工具，数据是给自己看的。默认打码等于每次取值都先拦自己一道，
+所以现在**不拦**——`key get` / `key list` / `entry get` / `section dump` 默认都给原文。
+
+要打码形态（投屏、录屏、截图给别人看）时显式加 `--mask`：
+
+```bash
+nx-sk key get OPENAI_KEY --mask      # sk-x******xxxx
+nx-sk key list --mask
+nx-sk export run --no-secrets        # 导出文件里也打码
+```
+
+打码规则：长度 ≤ 10 全部打码；否则前 4 + `******` + 后 4。
+
+**代价要清楚**：终端里有明文、`--json` 输出里有明文、投屏时会被看到。
+密码管理器那种「默认遮住」的取舍对本机自用是净成本，但对**分享**是必要的 ——
+所以外发前记得加 `--mask` / `--no-secrets`。
 
 ## 四、密钥从哪来（优先级固定）
 
@@ -86,7 +105,7 @@ nx-sk setting set --key kvSection --value mykeys
 ```bash
 # 口令模式（更安全：口令不进磁盘）
 export NX_SK_PASSPHRASE='你的长口令'
-nx-sk key get OPENAI_KEY --reveal
+nx-sk key get OPENAI_KEY
 
 # 本机密钥文件模式（默认，零配置）
 nx-sk key set OPENAI_KEY sk-xxxxxxxx
@@ -100,9 +119,9 @@ nx-sk key set OPENAI_KEY sk-xxxxxxxx
 
 ## 五、纪律（写给 agent）
 
-- **绝不**把 `--reveal` 的结果写进日志、注释、提交信息、issue 或任何给第三方的输出。
-- **绝不**在没人要求时加 `--reveal`。默认打码是常态，明文是例外。
-- 导出默认也是打码；只有显式 `--with-secrets` 才出明文，且导出文件里会标 `withSecrets: true`。
+- 默认原文是给**你自己看**的；一旦要把输出交给别人（日志、issue、截图、导出文件），
+  先加 `--mask` / `--no-secrets`。
+- 导出文件里 `withSecrets` 字段会明确标出这份文件含不含明文 —— **外发前先看这个字段**。
 - 用户想「把密钥同步到云端」——做不到，也别假装能做到。nx-sk 只在本机落盘与本地导出。
 
 ## 六、写入防呆

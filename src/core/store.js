@@ -16,7 +16,7 @@ export function defaultSettings() {
   return {
     exportDir: '', // 空 = ~/nx-sk/export
     exportFormat: 'both', // json | md | both
-    includeSecretsInExport: false,
+    includeSecretsInExport: true, // 默认含明文：本机单人工具，自己看不拦自己
     defaultSection: 'job',
     kvSection: 'secret', // `key` 系列命令作用在哪个栏目上
   };

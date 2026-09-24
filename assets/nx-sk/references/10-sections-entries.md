@@ -24,7 +24,7 @@ store.json（~/nx-sk/store.json 或 $NX_SK_STORE）
 | 新增 | `nx-sk section add <id> --title <标题> --template job` | `POST /api/sections` |
 | 修改 | `nx-sk section update <id> [--title …] [--add-field '{…}'] [--remove-field a,b]` | `PATCH /api/sections/:ref` |
 | 删除 | `nx-sk section remove <id> [--force]` | `DELETE /api/sections/:ref` |
-| **全量** | `nx-sk section dump <id> [--reveal]` | `GET /api/sections/:ref/dump` |
+| **全量** | `nx-sk section dump <id> [--mask]` | `GET /api/sections/:ref/dump` |
 | 模板 | `nx-sk section templates` | `GET /api/sections/templates` |
 
 - **`remove` 在栏目非空时会被 `blocked` 挡住**（除非 `--force`）——防止一键抹掉全部档案。
@@ -39,7 +39,7 @@ store.json（~/nx-sk/store.json 或 $NX_SK_STORE）
 | --- | --- | --- |
 | 列表 | `nx-sk entry list [--section job] [--q 关键字]` | `GET /api/entries` |
 | 字段字典 | `nx-sk entry fields [--section job]` | `GET /api/entries/fields` |
-| 单条 | `nx-sk entry get <id或名字> [--reveal] [--section job]` | `GET /api/entries/:ref` |
+| 单条 | `nx-sk entry get <id或名字> [--mask] [--section job]` | `GET /api/entries/:ref` |
 | 新增 | `nx-sk entry add --section job --set 姓名=张三 [--set 电话=…]` | `POST /api/entries` |
 | 修改 | `nx-sk entry update <ref> --set 期望城市=北京、上海 [--unset 微信]` | `PATCH /api/entries/:ref` |
 | 删除 | `nx-sk entry remove <ref>` | `DELETE /api/entries/:ref` |
@@ -54,7 +54,7 @@ store.json（~/nx-sk/store.json 或 $NX_SK_STORE）
 | （已取消）`--allow-new-field` | 现在**默认就是自动登记**，不必再带这个 flag |
 | `--title` | 条目名。不传则取栏目的 `titleField`（求职栏目是 `name`/姓名） |
 | `--dry-run` | 试运行：返回 `wouldCreate` / `wouldChange`，不落盘 |
-| `--reveal` | 读命令专用：显示密文字段明文 |
+| `--mask` | 读命令专用：密文字段**打码**显示（默认是原文；投屏/截图时用） |
 
 ### 三个容易踩的坑
 
@@ -120,7 +120,7 @@ nx-sk section update job --fields @fields.json
 `nx-sk serve` → 每个栏目一个 tab，共用同一个条目视图：
 
 - 左侧条目列表（带完整度），右侧按分组渲染的字段表单；
-- 「显示密文字段明文」勾选控制 `--reveal` 等价行为（选择持久化在 localStorage）；
+- 密文字段默认显示原文；「打码显示（投屏/截图时用）」勾选等价于 `--mask`（选择持久化在 localStorage）；
 - 保存是 **PATCH**：只有被你改动过的字段才会发出去（面板会显示「N 处改动」）；
 - 每个页面底部会派生显示该模块的 CLI 等价命令（可点击复制）。
 

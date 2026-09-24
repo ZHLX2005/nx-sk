@@ -22,18 +22,24 @@ export function formatValue(value) {
 }
 
 /**
- * 敏感字段的展示形态。三种输入都要处理：
- *   密文对象  → 有 decrypt 就解开（再看 reveal 决定打不打码），没有就标「已加密」
- *   明文      → 历史数据可能存的是明文，同样按 reveal 决定打码
- *   空        → null
+ * 敏感字段的展示形态。
+ *
+ * **默认原文**：这是本机单人工具，数据是给自己看的——默认打码等于每次都先拦自己一道。
+ * 落盘仍然是密文（AES-256-GCM），所以「store.json 泄露」不等于「凭据泄露」。
+ * 想看打码形态（投屏 / 截图时）显式传 `mask: true`。
+ *
+ * 三种输入都要处理：
+ *   密文对象 → 有 decrypt 就解开，没有就标「需要密钥」
+ *   明文     → 历史数据可能存的是明文，原样返回
+ *   空       → null
  */
-export function displaySensitive(raw, { reveal = false, decrypt } = {}) {
+export function displaySensitive(raw, { mask = false, decrypt } = {}) {
   if (raw === null || raw === undefined || raw === '') return null;
-  if (!isCipherBlob(raw)) return reveal ? String(raw) : maskValue(String(raw));
-  if (!decrypt) return reveal ? '[需要密钥才能解密]' : '[已加密]';
+  if (!isCipherBlob(raw)) return mask ? maskValue(String(raw)) : String(raw);
+  if (!decrypt) return mask ? '[已加密]' : '[需要密钥才能解密]';
   try {
     const plain = decrypt(raw);
-    return reveal ? plain : maskValue(plain);
+    return mask ? maskValue(plain) : plain;
   } catch {
     return '[无法解密：密钥或密文与写入时不一致]';
   }
@@ -43,14 +49,14 @@ export function displaySensitive(raw, { reveal = false, decrypt } = {}) {
  * 条目的**唯一序列化出口**（面板、`entry list`、`section dump` 共用一份）。
  * 两个出口各写一遍序列化，迟早会分叉成「CLI 看得到、面板看不到」。
  */
-export function serializeEntry(section, entry, { reveal = false, decrypt } = {}) {
+export function serializeEntry(section, entry, { mask = false, decrypt } = {}) {
   const c = completeness(section, entry);
   const values = {};
   for (const def of section.fields) {
     const raw = entry.values?.[def.key];
     if (isBlank(raw)) { values[def.key] = null; continue; }
     values[def.key] = isSensitiveField(section, def.key)
-      ? displaySensitive(raw, { reveal, decrypt })
+      ? displaySensitive(raw, { mask, decrypt })
       : raw;
   }
   return {
@@ -80,7 +86,7 @@ export function completeness(section, entry) {
 }
 
 /** 栏目的纯数据视图：所有条目 + 全部字段（含未填），供 `section dump` 与面板用。 */
-export function dumpSection(section, entries, { reveal = false, decrypt } = {}) {
+export function dumpSection(section, entries, { mask = false, decrypt } = {}) {
   const mine = entries.filter((e) => e.section === section.id);
   return {
     section: {
@@ -104,6 +110,6 @@ export function dumpSection(section, entries, { reveal = false, decrypt } = {}) 
       sensitive: isSensitiveField(section, x.key),
     })),
     count: mine.length,
-    entries: mine.map((e) => serializeEntry(section, e, { reveal, decrypt })),
+    entries: mine.map((e) => serializeEntry(section, e, { mask, decrypt })),
   };
 }

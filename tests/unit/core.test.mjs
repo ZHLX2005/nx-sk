@@ -96,39 +96,38 @@ test('completeness：给出已填数与未填字段清单', () => {
   assert.deepEqual(c.missing.map((m) => m.key).includes('name'), false);
 });
 
-test('serializeEntry：密文字段打码，reveal 时出明文', () => {
+test('serializeEntry：密文字段默认原文，--mask 才打码', () => {
   const entry = {
     id: 'e_1', section: 'secret', title: 'OpenAI 主号', tags: [],
     values: { value: 'sk-1234567890abcdef' },
     createdAt: null, updatedAt: null,
   };
-  const masked = serializeEntry(SEC, entry);
-  assert.equal(masked.values.value, 'sk-1******cdef');
-  const shown = serializeEntry(SEC, entry, { reveal: true });
-  assert.equal(shown.values.value, 'sk-1234567890abcdef');
-  assert.deepEqual(Object.keys(shown.values), ['value'], '密钥栏目就一个字段：KV');
+  const plain = serializeEntry(SEC, entry);
+  assert.equal(plain.values.value, 'sk-1234567890abcdef', '本机单人工具：默认不拦自己');
+  assert.equal(serializeEntry(SEC, entry, { mask: true }).values.value, 'sk-1******cdef');
+  assert.deepEqual(Object.keys(plain.values), ['value'], '密钥栏目就一个字段：KV');
 });
 
-test('displaySensitive：密文对象必须靠注入的 decrypt 才能出明文', () => {
+test('displaySensitive：默认原文；打码要显式要', () => {
   const key = newKey();
   const blob = encryptValue(key, 'sk-live-abcdefghijklmn');
   const decrypt = (b) => decryptValue(key, b);
 
-  assert.equal(displaySensitive(blob, {}), '[已加密]', '没有 decrypt 时不能猜出任何明文');
-  assert.equal(displaySensitive(blob, { reveal: true }), '[需要密钥才能解密]');
-  assert.equal(displaySensitive(blob, { decrypt }), 'sk-l******klmn', '有 decrypt 时默认仍打码');
-  assert.equal(displaySensitive(blob, { decrypt, reveal: true }), 'sk-live-abcdefghijklmn');
-  assert.equal(displaySensitive(blob, { reveal: true, decrypt: () => { throw new Error('wrong key'); } }), '[无法解密：密钥或密文与写入时不一致]');
+  assert.equal(displaySensitive(blob, { decrypt }), 'sk-live-abcdefghijklmn', '默认原文');
+  assert.equal(displaySensitive(blob, { decrypt, mask: true }), 'sk-l******klmn', '要打码就显式传 mask');
+  assert.equal(displaySensitive(blob, {}), '[需要密钥才能解密]', '没注入 decrypt 时不可能凭空得到明文');
+  assert.equal(displaySensitive(blob, { mask: true }), '[已加密]');
+  assert.equal(displaySensitive(blob, { decrypt: () => { throw new Error('wrong key'); } }), '[无法解密：密钥或密文与写入时不一致]');
   assert.equal(displaySensitive(null, { decrypt }), null);
 });
 
-test('serializeEntry：密文对象经 decrypt 后按 reveal 决定是否打码', () => {
+test('serializeEntry：密文对象经 decrypt 后默认出明文', () => {
   const key = newKey();
   const entry = { id: 'e_2', section: 'secret', title: 'x', tags: [], values: { value: encryptValue(key, 'sk-live-abcdefghijklmn') } };
   const decrypt = (b) => decryptValue(key, b);
-  assert.equal(serializeEntry(SEC, entry, { decrypt }).values.value, 'sk-l******klmn');
-  assert.equal(serializeEntry(SEC, entry, { decrypt, reveal: true }).values.value, 'sk-live-abcdefghijklmn');
-  assert.equal(serializeEntry(SEC, entry).values.value, '[已加密]');
+  assert.equal(serializeEntry(SEC, entry, { decrypt }).values.value, 'sk-live-abcdefghijklmn');
+  assert.equal(serializeEntry(SEC, entry, { decrypt, mask: true }).values.value, 'sk-l******klmn');
+  assert.equal(serializeEntry(SEC, entry).values.value, '[需要密钥才能解密]');
 });
 
 test('formatValue：bool / tags / 空值 的人读形态一致', () => {
@@ -139,12 +138,14 @@ test('formatValue：bool / tags / 空值 的人读形态一致', () => {
   assert.equal(formatValue(null, { type: 'text' }), '');
 });
 
-test('dumpSection：字段字典带 sensitive 标记，值未被 reveal 时打码', () => {
+test('dumpSection：字段台账带 sensitive 标记，值默认原文、mask 时打码', () => {
   const entry = { id: 'e_9', section: 'secret', title: 'x', tags: [], values: { value: 'sk-abcdefghijklmnop' } };
   const d = dumpSection(SEC, [entry]);
   assert.equal(d.section.id, 'secret');
   assert.equal(d.fields.find((f) => f.key === 'value').sensitive, true);
-  assert.equal(d.entries[0].values.value.includes('abcdefghij'), false);
+  assert.equal(d.entries[0].values.value, 'sk-abcdefghijklmnop');
+  const m = dumpSection(SEC, [entry], { mask: true });
+  assert.equal(m.entries[0].values.value.includes('abcdefghij'), false);
   assert.equal(d.count, 1);
 });
 

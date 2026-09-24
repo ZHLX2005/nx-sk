@@ -10,7 +10,8 @@ nx-sk export run --format json                     # 只要 JSON（md | json | b
 nx-sk export run --section job                     # 只导「求职」栏目
 nx-sk export run --out D:/备份/nx-sk               # 指定输出目录
 nx-sk export run --dry-run                         # 试运行：只告诉你将写哪些文件、多大
-nx-sk export run --with-secrets                    # 含密钥**明文**（默认打码）
+nx-sk export run                                   # 默认就含密钥明文（本机自己用）
+nx-sk export run --no-secrets                      # 打码后再导出（要分享给别人时用）
 nx-sk export list                                  # 历次导出 + 输出目录里的文件
 ```
 
@@ -19,7 +20,7 @@ nx-sk export list                                  # 历次导出 + 输出目录
 | `--format` | `json` / `md` / `both`，缺省取 `settings.exportFormat` |
 | `--section` | 只导一个栏目 |
 | `--out` | 输出目录，缺省取 `settings.exportDir`，再缺省 `~/nx-sk/export` |
-| `--with-secrets` / `--no-secrets` | 是否含密文字段明文。两个都不给时取 `settings.includeSecretsInExport`（默认 **false**） |
+| `--with-secrets` / `--no-secrets` | 是否含密文字段明文。两个都不给时取 `settings.includeSecretsInExport`（默认 **true**——本机自己用，不拦自己） |
 | `--dry-run` | 不写盘 |
 
 导出文件里 `withSecrets` 字段会明确标出这份文件是不是含明文——**分享前先看这个字段**。
@@ -74,6 +75,6 @@ cp ~/nx-sk/backup/20260924-144238-entry-remove-e_xxx.json ~/nx-sk/store.json
 | --- | --- | --- |
 | 谁发起 | 用户显式命令 | 系统在每次破坏性写入前自动 |
 | 目的 | 带走 / 备份 / 交给别人 | 误操作回滚 |
-| 内容 | 结构化 + 可读的 Markdown；密文默认打码 | 原样的整库 JSON（含密文） |
+| 内容 | 结构化 + 可读的 Markdown；凭据默认含明文（`--no-secrets` 可打码） | 原样的整库 JSON（含密文） |
 | 位置 | `~/nx-sk/export/`（可改） | `~/nx-sk/backup/`（固定） |
 | 回滚用 | 不能直接回滚（形状不同） | 能，拷回 store.json 即可 |
