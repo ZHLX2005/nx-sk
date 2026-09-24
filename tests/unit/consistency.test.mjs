@@ -271,6 +271,26 @@ test('assets/<skill>/ 里的每条命令都真实存在（单向断言：防 age
   assert.deepEqual(problems, [], `文档里提到了不存在的命令:\n${problems.join('\n')}`);
 });
 
+test('SKILL.md 的 ref 路由表 ↔ references/ 目录双向对账', async () => {
+  // 这条是本项目实测踩出来的：一个 ref 文件在两次提交之间被删掉，
+  // 而**没有任何断言会红** —— 命令漂移断言只看「文档提到的命令是否存在」，
+  // 不看「文档提到的 ref 文件是否存在」。agent 会照着 SKILL.md 去取，然后拿到 NOT_FOUND。
+  const skillDir = join(ROOT, 'assets', 'nx-sk');
+  const skillMd = await readFile(join(skillDir, 'SKILL.md'), 'utf8');
+  const named = [...skillMd.matchAll(/`(\d\d-[a-z0-9-]+)`/g)].map((m) => m[1]);
+  assert.ok(named.length >= 5, `SKILL.md 的 ref 路由表只解析出 ${named.length} 条，断言可能失效`);
+
+  const refDir = join(skillDir, 'references');
+  const files = (await readdir(refDir)).filter((n) => n.endsWith('.md'));
+  const onDisk = files.map((n) => n.replace(/\.md$/, ''));
+
+  const missing = named.filter((r) => !files.includes(`${r}.md`));
+  assert.deepEqual(missing, [], `SKILL.md 路由表列了不存在的 ref: ${missing.join(', ')}——agent 取它只会拿到 NOT_FOUND`);
+
+  const orphan = onDisk.filter((n) => !named.includes(n));
+  assert.deepEqual(orphan, [], `references/ 下这些 ref 没在 SKILL.md 路由表登记（agent 永远不会知道该读它）: ${orphan.join(', ')}`);
+});
+
 /** 抠出 Markdown 里的行内 code span 与围栏代码块，忽略 frontmatter。 */
 function codeSpans(markdown) {
   const body = markdown.replace(/^---\n[\s\S]*?\n---\n/, '');
