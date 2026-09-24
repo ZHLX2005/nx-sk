@@ -12,3 +12,6 @@ store.json
 # 个人信息（PII）绝不入库：一旦 push 到远端就收不回来了
 *-个人信息.txt
 seed/
+
+# agent 的工作笔记（含个人信息状态的描述），留在本机
+.workbuddy/
