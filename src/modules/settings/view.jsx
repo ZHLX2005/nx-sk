@@ -7,6 +7,9 @@ export default function SettingsView() {
   const { boot, reload, toast, guard } = useStore();
   const [data, setData] = useState(null);
   const [form, setForm] = useState(null);
+  // 面板地址不写死：直接取用户此刻访问的这个 origin，换端口/换 host 都自动跟上
+  const panelUrl = typeof window === 'undefined' ? '' : window.location.origin;
+  const panelPort = typeof window === 'undefined' ? '' : (window.location.port || '80');
 
   const load = useCallback(async () => {
     try {
@@ -78,13 +81,13 @@ export default function SettingsView() {
         <div className="colbody">
           <div className="row">
             <span className="name">面板地址</span>
-            <span className="desc mono">{`http://127.0.0.1:7800`}</span>
-            <span className="acts"><Copyable className="mono" text="http://127.0.0.1:7800">复制</Copyable></span>
+            <span className="desc mono">{panelUrl}</span>
+            <span className="acts"><Copyable className="mono" text={panelUrl}>复制</Copyable></span>
           </div>
           <div className="row">
             <span className="name">重启面板</span>
             <span className="desc">面板本身就是 serve 提供的；改代码后重启它即可</span>
-            <span className="acts"><Copyable className="mono" text="nx-sk serve --port 7800">nx-sk serve --port 7800</Copyable></span>
+            <span className="acts"><Copyable className="mono" text={`nx-sk serve --port ${panelPort}`}>{`nx-sk serve --port ${panelPort}`}</Copyable></span>
           </div>
           <div className="row">
             <span className="name">让 agent 学会用</span>

@@ -243,7 +243,7 @@ step('跨站 Origin 的读操作仍放行', readOrigin.status === 200);
 
 const localOrigin = await rawRequest(info.url, '/api/entries', {
   method: 'POST',
-  headers: { 'content-type': 'application/json', origin: 'http://127.0.0.1:7800' },
+  headers: { 'content-type': 'application/json', origin: 'http://127.0.0.1:7866' },
   body: JSON.stringify({ section: 'job', set: { 姓名: '本机面板造的' } }),
 });
 step('本机 Origin 的写操作放行', localOrigin.status === 200);

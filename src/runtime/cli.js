@@ -1,7 +1,7 @@
 // 通用 CLI 运行器：解析 → 匹配 → 校验 → 渲染 → help。
 // 命令表由 action 声明派生，所以「Web 上能做的 CLI 都能做」是结构保证，不靠人记。
 import { resolve as resolvePath } from 'node:path';
-import { APP_NAME, ENV_STORE, VERSION } from '../core/paths.js';
+import { APP_NAME, DEFAULT_PORT, ENV_STORE, VERSION } from '../core/paths.js';
 import { badInput, external, toErrorShape } from '../core/errors.js';
 import { ACTIONS, MODULES, MODULE_TITLES, commandEntry } from './registry.js';
 import { applySpec, argSpecsOf, cliPathsOf, flagSpecsOf, usageOf } from './spec.js';
@@ -21,7 +21,7 @@ async function cmdServe(ctx) {
   try {
     server = await startServer({ port: ctx.port });
   } catch (e) {
-    if (e && e.code === 'EADDRINUSE') throw external(`端口 ${ctx.port} 已被占用；换一个：nx-sk serve --port 7801`);
+    if (e && e.code === 'EADDRINUSE') throw external(`端口 ${ctx.port} 已被占用；换一个：nx-sk serve --port ${ctx.port + 1}（或在 nxSk.port 里改默认端口）`);
     throw external(`启动服务失败: ${e && e.message ? e.message : String(e)}`);
   }
   // --port 0 = 让 OS 挑一个空闲端口（测试用），所以真实端口要回读，不能信入参
@@ -63,7 +63,7 @@ const BUILTINS = [
     cli: ['serve'],
     http: null,
     summary: '启动 Web 面板（唯一常驻命令；--no-open 给开发与 CI 用）',
-    flags: { port: { type: 'number', default: 7800 }, 'no-open': { type: 'boolean' } },
+    flags: { port: { type: 'number', default: DEFAULT_PORT }, 'no-open': { type: 'boolean' } },
     run: (ctx) => cmdServe(ctx),
     render: () => '',
   },

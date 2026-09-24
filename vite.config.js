@@ -1,5 +1,13 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+
+// 端口从 package.json 的 nxSk 读（服务端 core/paths.js 也读同一处）。
+// 这里**不 import core/paths.js**：它用 import.meta.url 推算 PROJECT_ROOT，
+// 而 vite 会把配置打包到临时文件再加载，那时 import.meta.url 的基准就变了。
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
+const SERVE_PORT = Number(pkg.nxSk?.port ?? 7866);
+const VITE_PORT = Number(pkg.nxSk?.vitePort ?? 5180);
 
 // 前端源码根下的文件会被暴露成 URL：src/web/frontend/api/client.js → /api/client.js。
 // 而 /api 又是后端接口前缀，于是**前端自己的模块请求会被代理吞掉**——
@@ -19,10 +27,10 @@ export default defineConfig({
   plugins: [react()],
   build: { outDir: '../public', emptyOutDir: true },
   server: {
-    port: 5180,
+    port: VITE_PORT,
     host: '127.0.0.1',
     proxy: {
-      '/api': { target: 'http://127.0.0.1:7800', bypass: (req) => shouldServeLocally(req.url) },
+      '/api': { target: `http://127.0.0.1:${SERVE_PORT}`, bypass: (req) => shouldServeLocally(req.url) },
     },
   },
 });

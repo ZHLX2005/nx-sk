@@ -4,7 +4,7 @@
 数据全在你自己机器上 —— 默认 `~/nx-sk/`。
 
 ```
-nx-sk serve          # 打开面板（http://127.0.0.1:7800）
+nx-sk serve          # 打开面板（http://127.0.0.1:7866）
 ```
 
 ![结构](https://img.shields.io/badge/node-%3E%3D18.17-informational) ![license](https://img.shields.io/badge/license-MIT-informational)
@@ -62,7 +62,7 @@ CLI 与 API 同源，skill 驱动 agent**。落到具体功能上：
 ```bash
 pnpm install
 pnpm start                     # 构建前端 + 起面板
-# 或开发模式（vite :5180 + serve :7800，一个 Ctrl-C 关两个）
+# 或开发模式（vite :5180 + serve :7866，一个 Ctrl-C 关两个）
 pnpm run dev
 ```
 

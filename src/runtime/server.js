@@ -3,7 +3,7 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
-import { PUBLIC_DIR } from '../core/paths.js';
+import { DEFAULT_PORT, DEV_VITE_PORT, PUBLIC_DIR } from '../core/paths.js';
 import { handleApi } from './api.js';
 
 const MIME = {
@@ -41,7 +41,7 @@ async function sendFile(res, file) {
 const NOT_BUILT = [
   '面板还没有构建产物。',
   '',
-  '开发模式:  pnpm run dev        （vite :5180 + serve :7800）',
+  `开发模式:  pnpm run dev        （vite :${DEV_VITE_PORT} + serve :${DEFAULT_PORT}）`,
   '生产模式:  pnpm start          （先 vite build，再 serve）',
 ].join('\n');
 
@@ -59,7 +59,7 @@ async function serveStatic(pathname, res) {
   return sendText(res, 503, NOT_BUILT);
 }
 
-export function startServer({ port = 7800, host = '127.0.0.1' } = {}) {
+export function startServer({ port = DEFAULT_PORT, host = '127.0.0.1' } = {}) {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {

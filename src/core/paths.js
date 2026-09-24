@@ -15,6 +15,12 @@ export const APP_LABEL = 'nx-sk · 个人资源管理器';
 export const VERSION = pkg.version;
 export const SKILL_NAME = APP_NAME;
 
+// 端口只有一个来源：package.json 的 nxSk.port。服务端与 vite 代理都从这里取——
+// 散成字面量的话改一次就会漏一处，而漏掉 vite 代理的表现是「dev 模式下 /api 全 404」，
+// 很难和「端口」联系起来。
+export const DEFAULT_PORT = Number(pkg.nxSk?.port ?? 7866);
+export const DEV_VITE_PORT = Number(pkg.nxSk?.vitePort ?? 5180);
+
 /**
  * 数据根目录：`~/nx-sk/`
  *
