@@ -1,0 +1,42 @@
+{
+  "name": "nx-sk",
+  "version": "0.1.0",
+  "description": "nx-sk · 本机个人资源管理器（server-cli-web 骨架）：栏目化存储个人信息与大模型密钥，CLI 与 Web 同源，敏感字段密文落盘。",
+  "type": "module",
+  "bin": {
+    "nx-sk": "bin/nx-sk.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "assets/",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:vite": "vite",
+    "dev:serve": "node bin/nx-sk.mjs serve --no-open",
+    "build": "vite build",
+    "start": "pnpm run build && node bin/nx-sk.mjs serve",
+    "lint": "eslint .",
+    "test:unit": "node --test",
+    "test:smoke": "node tests/smoke.mjs",
+    "test": "pnpm run lint && pnpm run build && pnpm run test:smoke && pnpm run test:unit"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "vite": "^6.0.7"
+  }
+}

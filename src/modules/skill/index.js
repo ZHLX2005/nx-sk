@@ -1,0 +1,47 @@
+import * as service from './service.js';
+
+export default {
+  id: 'skill',
+  title: 'Skill',
+  order: 800,
+  view: () => import('./view.jsx'),
+  actions: [
+    {
+      id: 'skill.list',
+      cli: ['skill', 'list'],
+      http: ['GET', '/api/skills'],
+      summary: '列出随包分发的内置 skill 与其 ref 文档',
+      flags: {},
+      run: () => service.listSkills(),
+      render: (d) => service.renderSkillList(d),
+    },
+    {
+      id: 'skill.install',
+      cli: ['skill', 'install'],
+      http: ['POST', '/api/skills/install'],
+      summary: '把内置 skill 装到 ~/.claude/skills（三态：安装 / 已最新 / 冲突需 --force）',
+      args: [{ name: 'name', required: false }],
+      flags: {
+        to: { type: 'string', hint: '安装目录，缺省 ~/.claude/skills' },
+        force: { type: 'boolean', hint: '目标存在且内容不同时覆盖' },
+        'dry-run': { type: 'boolean' },
+      },
+      run: (ctx) => service.installSkill(ctx),
+      render: (d) => service.renderInstall(d),
+    },
+    {
+      id: 'skill.get',
+      cli: ['skill', 'get'],
+      http: ['POST', '/api/skills/get'],
+      summary: '输出 SKILL.md 或 references/<ref> 全文（prefix + 文档 + install 状态三段），同时按 install 逻辑装好',
+      args: [{ name: 'name', required: false }, { name: 'ref', required: false }],
+      flags: {
+        to: { type: 'string' },
+        force: { type: 'boolean' },
+        'dry-run': { type: 'boolean', hint: '只输出文档，不装到本机' },
+      },
+      run: (ctx) => service.getSkill(ctx),
+      render: (d) => service.renderSkillContext(d),
+    },
+  ],
+};

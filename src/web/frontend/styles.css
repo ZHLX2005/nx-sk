@@ -1,0 +1,301 @@
+/* nx-sk 面板样式
+ *
+ * 三条核心不变量：
+ *   1. 单色 + 无 emoji；唯一允许的彩色是语义红 #b3261e
+ *   2. 状态用标签，不用颜色块
+ *   3. 立体感**只给**可被按/可被填的元素（按钮 / 选中态 / 输入框）；容器一律不投影
+ *
+ * 密度：核心显示行 28px · 按钮 32px · 字号 12px（两级密度，差 4px）
+ * 分隔：全站只用 1px 浅底线，不用 margin / 投影把容器撑成岛屿
+ */
+:root {
+  --ink: #14161a;
+  --paper: #fff;
+  --soft: #f5f6f7;
+  --soft-2: #ebedf0;
+  --mid: #8b9096;
+  --danger: #b3261e;
+  --border: 1px solid var(--soft-2);
+
+  --row-h: 28px;
+  --btn-h: 32px;
+  --fs-core: 12px;
+
+  --radius-btn: 8px;
+
+  --shadow-relief: -1px -1px 2px rgba(255, 255, 255, .85), 2px 2px 6px rgba(20, 22, 26, .07);
+  --shadow-relief-press: inset 1px 1px 2px rgba(20, 22, 26, .10), inset -1px -1px 2px rgba(255, 255, 255, .7);
+  --shadow-relief-inset: inset 1px 1px 2px rgba(20, 22, 26, .06), inset -1px -1px 2px rgba(255, 255, 255, .9);
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: var(--fs-core);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono, code, .path, .cli-cmd { font-family: ui-monospace, Consolas, "Courier New", monospace; }
+.muted { color: var(--mid); }
+.bad { color: var(--danger); }
+.nowrap { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pad { padding: 10px 14px; }
+.rowgap { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.grow { flex: 1; min-width: 0; }
+.right { margin-left: auto; }
+
+/* ── 骨架 ───────────────────────────────────────────── */
+.app { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+
+header.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  border-bottom: var(--border);
+  flex-shrink: 0;
+}
+header.top .brand { font-weight: 700; letter-spacing: .3px; }
+header.top .meta { color: var(--mid); font-size: 11px; }
+
+nav.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 14px;
+  border-bottom: var(--border);
+  flex-shrink: 0;
+}
+
+main.body { flex: 1; min-height: 0; overflow: auto; }
+
+/* ── tab：单层立体阴影，别叠 --shadow，叠两层就变岛屿 ── */
+.tab {
+  font: inherit;
+  font-size: var(--fs-core);
+  height: var(--btn-h);
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-btn);
+  background: var(--soft);
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tab .count { color: var(--mid); font-size: 11px; }
+.tab.active { background: var(--paper); box-shadow: var(--shadow-relief); font-weight: 600; }
+
+/* ── 按钮：凸起 → 按下内嵌 + 下沉 1px ── */
+.btn {
+  font: inherit;
+  font-size: var(--fs-core);
+  cursor: pointer;
+  height: var(--btn-h);
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-btn);
+  background: var(--ink);
+  color: var(--paper);
+  box-shadow: var(--shadow-relief);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: box-shadow .12s, transform .08s;
+}
+.btn:hover:not(:disabled) { box-shadow: var(--shadow-relief), 0 0 0 3px rgba(20, 22, 26, .05); }
+.btn:active:not(:disabled) { box-shadow: var(--shadow-relief-press); transform: translateY(1px); }
+.btn:disabled { background: var(--soft); color: var(--mid); box-shadow: var(--shadow-relief-inset); cursor: not-allowed; }
+.btn.ghost { background: var(--soft); color: var(--ink); }
+.btn.danger { background: var(--danger); color: #fff; }
+.btn.small { height: 22px; padding: 0 8px; font-size: 11px; border-radius: 6px; }
+
+input, select, textarea {
+  font: inherit;
+  font-size: var(--fs-core);
+  color: var(--ink);
+  background: var(--paper);
+  border: var(--border);
+  border-radius: 6px;
+  padding: 0 8px;
+}
+input, select { height: var(--row-h); }
+textarea { padding: 5px 8px; resize: vertical; min-height: 56px; line-height: 1.5; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--soft-2); box-shadow: var(--shadow-relief-inset); }
+label.inline { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ── 卡片：不投影、不 margin、不用大 padding；靠 1px 底线分隔 ── */
+.card { border-bottom: var(--border); }
+.card:last-child { border-bottom: 0; }
+.card > .colhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--row-h);
+  padding: 0 14px;
+  border-bottom: var(--border);
+  font-size: 13px;
+  font-weight: 600;
+}
+.card > .colbody { padding: 0; }
+
+/* ── 行：28px 锁死高度，竖直 padding = 0 ── */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--row-h);
+  padding: 0 14px;
+  border-bottom: var(--border);
+  font-size: var(--fs-core);
+  transition: background .12s;
+}
+.row:hover { background: var(--soft); }
+.row:last-child { border-bottom: 0; }
+.row .name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .desc { color: var(--mid); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .acts { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.row.selectable { cursor: pointer; }
+.row.selected { background: var(--soft); box-shadow: inset 2px 0 0 var(--ink); }
+
+/* ── 标签：比行更紧凑 ── */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--mid);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.tag.strong { background: var(--ink); color: var(--paper); }
+.tag.bad { background: #fbeae9; color: var(--danger); }
+
+/* ── 点击即复制 ── */
+.copyable { cursor: copy; border-radius: 4px; padding: 0 3px; }
+.copyable:hover { background: var(--soft); }
+
+/* ── 表单字段矩阵 ── */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 14px; }
+.field { border-bottom: var(--border); padding: 5px 0; min-width: 0; }
+.field > .flabel { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--mid); }
+.field > .flabel .fkey { font-family: ui-monospace, Consolas, monospace; font-size: 10px; color: var(--soft-2); }
+.field > .fctrl { margin-top: 3px; }
+.field input, .field select, .field textarea { width: 100%; }
+.field.wide { grid-column: 1 / -1; }
+.group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--row-h);
+  padding: 0 14px;
+  border-bottom: var(--border);
+  background: var(--soft);
+  font-size: 11px;
+  color: var(--mid);
+  letter-spacing: .5px;
+}
+
+/* ── CLI 提示：文案通顺，命令之间用间隔点分开 ── */
+.cli-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 14px;
+  color: var(--mid);
+  font-size: 11px;
+  border-top: var(--border);
+}
+.cli-hint-label { margin-right: 4px; }
+.cli-hint-sep { color: var(--soft-2); }
+.cli-cmd { color: var(--ink); }
+
+/* ── toast ── */
+.toasts { position: fixed; right: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 6px; z-index: 40; }
+.toast {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: var(--fs-core);
+  box-shadow: var(--shadow-relief);
+  max-width: 420px;
+}
+.toast.bad { background: var(--danger); }
+
+/* ── 弹窗：页内实现，不用 alert / confirm / prompt ── */
+.mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 22, 26, .28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 20px;
+}
+.dialog {
+  background: var(--paper);
+  border-radius: 8px;
+  min-width: 320px;
+  max-width: min(880px, 92vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(20, 22, 26, .18);
+}
+.dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--row-h);
+  padding: 0 14px;
+  border-bottom: var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.dialog-body { padding: 10px 14px; overflow: auto; min-height: 0; }
+.dialog-foot {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 8px 14px;
+  border-top: var(--border);
+  flex-shrink: 0;
+}
+pre.block {
+  margin: 0;
+  padding: 10px 14px;
+  background: var(--soft);
+  border-radius: 8px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 60vh;
+  overflow: auto;
+}
+.hint { color: var(--mid); font-size: 11px; }
+.stack { display: flex; flex-direction: column; gap: 10px; }
+
+/* ── 布局：flex + wrap，不写死宽度；min-width:0 是关键，否则长内容撑破容器 ── */
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cols { display: flex; gap: 14px; align-items: flex-start; padding: 0 14px 14px; }
+.col { flex: 1; min-width: 0; }
+.desc { color: var(--mid); }
+.cols > .col > .card { border: var(--border); border-radius: 4px; }

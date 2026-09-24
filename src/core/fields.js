@@ -1,0 +1,241 @@
+// 字段字典：栏目的字段模板是**数据**，不是代码分支。
+// agent 与面板都从同一份声明渲染，所以「CLI 能填的字段」与「面板能填的字段」不可能分叉。
+//
+// type 取值：text | textarea | number | date | month | bool | select | tags | secret
+
+export const FIELD_TYPES = ['text', 'textarea', 'number', 'date', 'month', 'bool', 'select', 'tags', 'secret'];
+
+export const BOOL_TRUE = ['是', 'true', '1', 'yes', 'y'];
+export const BOOL_FALSE = ['否', 'false', '0', 'no', 'n'];
+
+const f = (key, label, type, group, extra = {}) => ({ key, label, type, group, ...extra });
+
+const JOB_FIELDS = [
+  // —— 基本信息 ——
+  f('name', '姓名', 'text', 'basic'),
+  f('namePinyin', '姓名拼音', 'text', 'basic', { hint: '姓名拼音，便于英文表单填写' }),
+  f('englishName', '英文姓名', 'text', 'basic', { hint: '完整英文姓名' }),
+  f('gender', '性别', 'select', 'basic', { options: ['男', '女'] }),
+  f('birthDate', '出生日期', 'date', 'basic'),
+  f('age', '年龄', 'number', 'basic', { hint: '可不填：留空时按出生日期推算' }),
+  f('nationality', '国籍', 'text', 'basic', { hint: '默认中国' }),
+  f('ethnicity', '民族', 'text', 'basic', { hint: '民族信息' }),
+  f('maritalStatus', '婚姻状况', 'select', 'basic', { options: ['未婚', '已婚', '离异', '丧偶'] }),
+  f('hasChildren', '有无子女', 'bool', 'basic'),
+  f('politicalStatus', '政治面貌', 'select', 'basic', { options: ['群众', '共青团员', '中共预备党员', '中共党员', '民主党派', '其他'] }),
+  f('partyJoinDate', '入党时间', 'date', 'basic', { hint: '加入党组织的时间' }),
+  f('leagueJoinDate', '入团时间', 'date', 'basic', { hint: '加入共青团的时间' }),
+  f('idType', '证件类型', 'select', 'basic', { options: ['身份证', '护照', '港澳居民来往内地通行证', '台湾居民来往大陆通行证', '其他'] }),
+  f('idNumber', '身份证号', 'text', 'basic', { hint: '证件号码' }),
+
+  // —— 联系方式 ——
+  f('phone', '电话', 'text', 'contact', { hint: '手机号码' }),
+  f('email', '邮箱', 'text', 'contact', { hint: '联系邮箱' }),
+  f('wechat', '微信号', 'text', 'contact', { hint: '即时通讯微信号' }),
+  f('qq', 'QQ号', 'text', 'contact', { hint: 'QQ 号码' }),
+  f('homepage', '个人主页/作品链接', 'text', 'contact', { hint: '个人主页、作品集或代码仓库链接' }),
+  f('postalCode', '邮政编码', 'text', 'contact', { hint: '现居住地邮编' }),
+
+  // —— 教育背景 ——
+  f('education', '最高学历', 'select', 'education', { options: ['大专', '本科', '硕士', '博士', '其他'] }),
+  f('degree', '学位', 'select', 'education', { options: ['学士', '硕士', '博士', '无'] }),
+  f('school', '毕业院校', 'text', 'education'),
+  f('major', '毕业专业', 'text', 'education'),
+  f('studyMode', '学习形式', 'select', 'education', { options: ['全国普通高等院校全日制', '非全日制', '成人教育', '自学考试', '其他'] }),
+  f('enrollDate', '入学时间', 'month', 'education'),
+  f('graduateDate', '毕业时间', 'month', 'education'),
+  f('englishLevel', '英语等级', 'select', 'education', { options: ['无', 'CET-3', 'CET-4', 'CET-6', '专业四级', '专业八级', '雅思', '托福'] }),
+  f('gaokaoDate', '高考时间', 'month', 'education', { hint: '高考参加时间' }),
+  f('gaokaoScore', '高考分数', 'number', 'education', { hint: '高考成绩' }),
+  f('gaokaoSubjects', '高考科目', 'text', 'education', { hint: '高考选科组合' }),
+  f('isFreshGraduate', '是否应届生', 'bool', 'education'),
+  f('isBaoyan', '是否保研', 'bool', 'education', { hint: '是否推荐免试攻读研究生' }),
+  f('hasOverseasStudy', '是否有留学经历', 'bool', 'education'),
+  f('internships', '实习经历', 'textarea', 'education', { hint: '每行一条：单位（起止时间）- 岗位' }),
+  f('projects', '项目经历', 'textarea', 'education', { hint: '每行一条：项目名（起止时间）- 技术栈/职责' }),
+  f('certificates', '技能证书', 'textarea', 'education', { hint: '每行一条证书或获奖' }),
+
+  // —— 户籍与居住 ——
+  f('hukouPlace', '户口所在地', 'text', 'household', { hint: '省市' }),
+  f('hukouType', '户口性质', 'select', 'household', { options: ['农业户口', '城镇户口', '其他'] }),
+  f('nativePlace', '籍贯', 'text', 'household', { hint: '籍贯（省市）' }),
+  f('studentOrigin', '生源地', 'text', 'household', { hint: '毕业生生源地' }),
+  f('archiveOrg', '档案存放机构', 'text', 'household'),
+  f('archivePlace', '档案所在地', 'text', 'household', { hint: '人事档案所在地区' }),
+  f('address', '现居住地址', 'textarea', 'household', { hint: '省市 + 详细地址' }),
+
+  // —— 身体信息 ——
+  f('height', '身高', 'number', 'body', { hint: '身高(cm)' }),
+  f('weight', '体重', 'number', 'body', { hint: '体重(kg)' }),
+  f('bloodType', '血型', 'select', 'body', { options: ['A', 'B', 'AB', 'O', '未知'] }),
+  f('healthStatus', '健康状况', 'select', 'body', { options: ['良好', '一般', '较差'] }),
+  f('hasChronic', '是否有长期病史', 'bool', 'body'),
+  f('isColorWeak', '是否色弱', 'bool', 'body', { hint: '是否存在色觉弱' }),
+  f('hasCriminalRecord', '是否有犯罪记录', 'bool', 'body'),
+
+  // —— 紧急联系 ——
+  f('emergencyName', '紧急联系人姓名', 'text', 'emergency'),
+  f('emergencyRelation', '紧急联系人关系', 'select', 'emergency', { options: ['父亲', '母亲', '配偶', '子女', '兄弟姐妹', '朋友', '其他'] }),
+  f('emergencyPhone', '紧急联系电话', 'text', 'emergency'),
+
+  // —— 自我描述 ——
+  f('selfIntro', '自我介绍', 'textarea', 'about', { hint: '个人自我介绍' }),
+  f('advantages', '个人优势', 'textarea', 'about', { hint: '个人优势和特长' }),
+  f('hobbies', '兴趣爱好', 'textarea', 'about'),
+
+  // —— 求职意向 ——
+  f('targetPosition', '目标岗位', 'text', 'job'),
+  f('availableFrom', '预计入职时间', 'text', 'job', { hint: '预计到岗时间，如「随时到岗」「2027-07」' }),
+  f('expectCities', '期望城市', 'tags', 'job', { hint: '期望工作城市，最多 5 个', maxItems: 5 }),
+  f('interviewCities', '面试城市', 'tags', 'job', { hint: '可参与面试城市' }),
+  f('expectSalaryMonthly', '期望薪资', 'number', 'job', { hint: '期望税前月薪（元）' }),
+  f('expectSalaryYearly', '期望年薪', 'number', 'job', { hint: '期望年薪，仅填写数字' }),
+  f('currentSalary', '当前薪资', 'number', 'job', { hint: '当前税前月薪（元）' }),
+  f('workYears', '工作年限', 'number', 'job', { hint: '总工作年限（在读或应届写 0）' }),
+  f('workStatus', '工作状态', 'select', 'job', { options: ['在读', '应届毕业生', '在职', '离职', '待业'] }),
+  f('lastCompany', '上一家公司', 'text', 'job', { hint: '最近工作单位' }),
+  f('techLevel', '专业技术职级', 'text', 'job', { hint: '专业技术资格等级' }),
+  f('hasRelativesInCompany', '是否有亲人在当前求职公司', 'bool', 'job', { hint: '是否有亲属在当前应聘的公司任职' }),
+  f('sourceChannel', '招聘信息来源', 'select', 'job', { options: ['公司招聘官网', 'BOSS直聘', '智联招聘', '前程无忧', '校园招聘', '内推', '猎头', '社交媒体', '其他'] }),
+  f('acceptAdjustment', '是否接受调剂', 'bool', 'job', { hint: '是否接受岗位或城市调剂' }),
+  f('jobNote', '求职备注', 'textarea', 'job', { hint: '补充说明' }),
+
+  // —— 其他 ——
+  f('religion', '宗教信仰', 'text', 'extra', { hint: '没有就写「无」' }),
+  f('unionVolunteer', '是否自愿加入公司工会', 'bool', 'extra'),
+];
+
+const SECRET_FIELDS = [
+  f('provider', '服务商', 'select', 'key', {
+    options: ['OpenAI', 'Anthropic', 'Google', 'DeepSeek', 'Moonshot 月之暗面', '阿里云通义', '字节豆包', '智谱 GLM', '百度文心', '腾讯混元', '硅基流动', 'OpenRouter', '其他'],
+  }),
+  f('keyValue', '密钥值', 'secret', 'key', { hint: 'API Key，密文落盘；列表与导出默认只显示首尾' }),
+  f('baseUrl', '接口地址', 'text', 'key', { hint: '自定义 Base URL，留空用官方默认' }),
+  f('model', '模型标识', 'text', 'key', { hint: '例如 gpt-4o-mini / claude-sonnet-4 / deepseek-chat' }),
+  f('purpose', '用途', 'text', 'key', { hint: '这个 key 用来做什么' }),
+  f('expiresAt', '有效期', 'date', 'key'),
+  f('quota', '额度/计费', 'text', 'key', { hint: '额度或计费提示' }),
+  f('note', '备注', 'textarea', 'key'),
+];
+
+const TEMPLATES = {
+  job: {
+    id: 'job',
+    label: '求职 / 个人信息',
+    description: '求职用的个人信息档案：一次填好，所有网申表单都能从这里取数。',
+    titleField: 'name',
+    titleLabel: '档案名',
+    groups: [
+      { id: 'basic', title: '基本信息' },
+      { id: 'contact', title: '联系方式' },
+      { id: 'education', title: '教育背景' },
+      { id: 'household', title: '户籍与居住' },
+      { id: 'body', title: '身体信息' },
+      { id: 'emergency', title: '紧急联系' },
+      { id: 'about', title: '自我描述' },
+      { id: 'job', title: '求职意向' },
+      { id: 'extra', title: '其他' },
+    ],
+    fields: JOB_FIELDS,
+  },
+  secret: {
+    id: 'secret',
+    label: '密钥 / 凭据',
+    description: '大模型 API Key 与其它凭据：密文字段落盘，只有在显式揭示或带 --with-secrets 导出时才出现明文。',
+    titleField: 'provider',
+    titleLabel: '密钥名',
+    groups: [{ id: 'key', title: '密钥信息' }],
+    fields: SECRET_FIELDS,
+  },
+};
+
+export function templateIds() {
+  return Object.keys(TEMPLATES);
+}
+
+export function getTemplate(id) {
+  return TEMPLATES[String(id || '')] || null;
+}
+
+/** 模板摘要，给 `section templates` 与面板的「新建栏目」用。 */
+export function templateSummaries() {
+  return Object.values(TEMPLATES).map((t) => ({
+    id: t.id,
+    label: t.label,
+    description: t.description,
+    groups: t.groups.length,
+    fields: t.fields.length,
+  }));
+}
+
+/** 由模板实例化一个栏目。深拷贝 —— 栏目自己的字段集从此独立演化。 */
+export function instantiateTemplate(templateId, overrides = {}) {
+  const t = getTemplate(templateId);
+  if (!t) return null;
+  return {
+    id: overrides.id,
+    title: overrides.title || t.label,
+    description: overrides.description || t.description,
+    order: Number.isFinite(overrides.order) ? overrides.order : 50,
+    template: t.id,
+    titleField: overrides.titleField || t.titleField,
+    titleLabel: overrides.titleLabel || t.titleLabel,
+    groups: t.groups.map((g) => ({ ...g })),
+    fields: t.fields.map((x) => ({ ...x })),
+    createdAt: overrides.createdAt || null,
+    updatedAt: overrides.updatedAt || null,
+  };
+}
+
+/** 首次运行（store 文件不存在）时的默认栏目——第一个就是「求职」。 */
+export function seedSections(stamp) {
+  return [
+    { ...instantiateTemplate('job', { id: 'job', title: '求职', order: 10 }), createdAt: stamp, updatedAt: stamp },
+    { ...instantiateTemplate('secret', { id: 'secret', title: '密钥', order: 20 }), createdAt: stamp, updatedAt: stamp },
+  ];
+}
+
+/** 由「字段定义 + 值」推导栏目的分组结构，供 render/面板用。 */
+export function groupFields(fields) {
+  const order = [];
+  const map = new Map();
+  for (const x of fields || []) {
+    const g = x.group || 'other';
+    if (!map.has(g)) { map.set(g, []); order.push(g); }
+    map.get(g).push(x);
+  }
+  return order.map((id) => ({ id, fields: map.get(id) }));
+}
+
+export function fieldByKey(section, key) {
+  return (section?.fields || []).find((x) => x.key === key) || null;
+}
+
+export function fieldByLabel(section, label) {
+  const s = String(label || '').trim();
+  return (section?.fields || []).find((x) => x.label === s || x.key === s) || null;
+}
+
+export function isSensitiveField(section, key) {
+  const def = fieldByKey(section, key);
+  return !!(def && (def.sensitive || def.type === 'secret'));
+}
+
+/**
+ * 栏目定位：**id 或标题都接受**。
+ * 放宽的理由：agent 手里往往是人读的名字（「求职」），而不是内部 id。
+ * 放 core 是因为每个模块都要用它，而模块之间不许互相 import。
+ */
+export function findSection(store, ref) {
+  const s = String(ref ?? '').trim();
+  if (!s) return null;
+  const lower = s.toLowerCase();
+  return (store?.sections || []).find((x) => x.id === lower)
+    || (store?.sections || []).find((x) => x.title === s)
+    || null;
+}
+
+export function sectionNames(store) {
+  const names = (store?.sections || []).map((x) => `${x.id}（${x.title}）`).join('、');
+  return names || '（还没有栏目）';
+}

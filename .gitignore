@@ -1,0 +1,14 @@
+node_modules/
+src/web/public/
+*.log
+.tmp/
+.DS_Store
+
+# 本机数据目录的镜像（真实数据在 ~/nx-sk/，绝不入库）
+store.json
+*.vaultkey
+*.vaultsalt
+
+# 个人信息（PII）绝不入库：一旦 push 到远端就收不回来了
+*-个人信息.txt
+seed/
