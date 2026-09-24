@@ -136,6 +136,8 @@ const secList = await cliJson(['section', 'list']);
 step('栏目带 kv 标记（面板据此渲染 KV 表格，不是条目列表）',
   secList.sections.find((s) => s.id === 'secret')?.kv === true
   && secList.sections.find((s) => s.id === 'job')?.kv === false);
+step('bootstrap 也要带 kv（它是 agent 的首选入口，不能让 agent 再猜一次）',
+  boot.sections.find((s) => s.id === 'secret')?.kv === true);
 
 await cliJson(['key', 'set', 'KV_PROBE', 'sk-probe']);
 const kvProbe = await cliJson(['key', 'list']);

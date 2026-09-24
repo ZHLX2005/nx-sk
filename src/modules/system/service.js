@@ -35,9 +35,11 @@ export async function bootstrapInfo() {
       [ENV_PASSPHRASE]: process.env[ENV_PASSPHRASE] ? '已设置（口令模式）' : null,
     },
     settings: store.settings,
+    // kv 必须带上：bootstrap 是 agent 的首选入口，它得能一眼看出「哪个栏目是 KV 表」
+    // （缺这字段时 agent 只能猜 `/api/sections` 再去查，等于多一次往返）。
     sections: store.sections.map((s) => ({
       id: s.id, title: s.title, description: s.description, order: s.order, template: s.template,
-      titleLabel: s.titleLabel, fields: s.fields.length, entries: bySection[s.id] || 0,
+      kv: s.kv === true, titleLabel: s.titleLabel, fields: s.fields.length, entries: bySection[s.id] || 0,
     })),
     counts: { sections: store.sections.length, entries: store.entries.length, commands: commands.length },
     vault: await vaultStatus(),
