@@ -106,8 +106,14 @@ step('重复 add 报 CONFLICT（不静默 upsert）', dup.code === 'CONFLICT');
 const noArg = await cliError(['entry', 'add', '--section', 'job']);
 step('缺参数报错带「用法:」锚点', noArg.code === 'INVALID_INPUT' && noArg.error.includes('用法:'));
 
-const badField = await cliError(['entry', 'update', '冒烟测试', '--set', '不存在的字段=1']);
-step('未知字段报错并给候选', badField.error.includes('没有字段'));
+const autoField = await cliJson(['entry', 'update', '冒烟测试', '--set', '技术博客=https://example.com', '--set', '是否有offer=否']);
+step('字典里没有的字段**直接写**（自动登记，不再报错）', autoField.status === 'ok' && autoField.newFields.includes('技术博客'), autoField.newFields.join(','));
+const afterAuto = await cliJson(['entry', 'get', '冒烟测试']);
+step('自动登记的字段立刻可读', afterAuto.values['技术博客'] === 'https://example.com');
+step('自动登记时推断 bool（是/否 不存成文本）', afterAuto.values['是否有offer'] === false);
+const ledger = await cliJson(['entry', 'fields', '--section', 'job']);
+step('新字段进了台账（已知字段 = 模板建议 + 写过的）', ledger.sections[0].fields.some((f) => f.key === '技术博客'));
+step('中文键直接可用（不必记英文别名）', ledger.sections[0].fields.some((f) => f.key === '是否有offer'));
 
 const updated = await cliJson(['entry', 'update', '冒烟测试', '--set', '目标岗位=后端开发', '--set', '是否应届生=是', '--unset', '电话']);
 step('entry update 是 PATCH 语义', updated.changed.includes('targetPosition') && updated.changed.includes('-phone'));
@@ -121,26 +127,54 @@ step('remove --dry-run 不落盘', dryRemove.status === 'skipped' && dryRemove.d
 const stillThere = await cliJson(['entry', 'get', '冒烟测试']);
 step('试运行后条目还在', stillThere.id === got.id);
 
-// 密钥栏目：密文落盘 + 默认打码
-const secret = await cliJson(['entry', 'add', '--section', 'secret', '--set', 'provider=OpenAI', '--set', 'keyValue=sk-smoke-1234567890abcdef']);
-const masked = await cliJson(['entry', 'get', secret.id]);
-step('密文字段默认打码', masked.values.keyValue === 'sk-s******cdef', masked.values.keyValue);
-step('密文里读不到明文', !JSON.stringify(masked).includes('1234567890abcdef'));
+// 密钥 = 极简 KV：名称 → 值。走 key 直通命令（= entry 的语法糖，作用在 kvSection 上）
+const secFields = await cliJson(['entry', 'fields', '--section', 'secret']);
+step('密钥栏目是单字段 KV', secFields.sections[0].fields.length === 1 && secFields.sections[0].titleField === null,
+  `${secFields.sections[0].fields.length} 个字段`);
 
-const reveal = await cliJson(['entry', 'get', secret.id, '--reveal']);
-step('--reveal 才给明文', reveal.values.keyValue === 'sk-smoke-1234567890abcdef');
+const set1 = await cliJson(['key', 'set', 'SMOKE_KEY', 'sk-smoke-1234567890abcdef']);
+step('key set 创建', set1.status === 'ok' && set1.created === true && set1.name === 'SMOKE_KEY');
+
+const set2 = await cliJson(['key', 'set', 'SMOKE_KEY', 'sk-smoke-1234567890abcdef']);
+step('key set 同值幂等（status=skipped，不重写密文）', set2.status === 'skipped' && set2.unchanged === true);
+
+const set3 = await cliJson(['key', 'set', 'SMOKE_KEY', 'sk-smoke-NEW-0987654321fedcba']);
+step('key set 是覆盖语义（KV 的 SET）', set3.status === 'ok' && set3.created === false && set3.replaced === true);
+
+const masked = await cliJson(['key', 'get', 'SMOKE_KEY']);
+step('key get 默认打码', masked.value === 'sk-s******dcba', masked.value);
+step('打码结果里读不到明文', !JSON.stringify(masked).includes('0987654321fedcba'));
+
+const reveal = await cliJson(['key', 'get', 'SMOKE_KEY', '--reveal']);
+step('key get --reveal 才给明文', reveal.value === 'sk-smoke-NEW-0987654321fedcba');
+
+const keyList = await cliJson(['key', 'list']);
+step('key list 列出键，值打码', keyList.count === 1 && keyList.keys[0].name === 'SMOKE_KEY' && !keyList.keys[0].value.includes('0987654321'));
+const keyListReveal = await cliJson(['key', 'list', '--reveal']);
+step('key list --reveal 给明文', keyListReveal.keys[0].value === 'sk-smoke-NEW-0987654321fedcba');
 
 const raw = await readFile(join(home, 'store.json'), 'utf8');
-step('store.json 里没有密钥明文', !raw.includes('sk-smoke-1234567890'), '只有 AES-GCM 密文对象');
+step('store.json 里没有密钥明文', !raw.includes('sk-smoke'), '只有 AES-GCM 密文对象');
 step('store.json 里落的是密文对象', /"alg": "aes-256-gcm"/.test(raw));
 
-const refuseMask = await cliError(['entry', 'update', secret.id, '--set', 'keyValue=sk-x******zzzz']);
+const refuseMask = await cliError(['key', 'set', 'SMOKE_KEY', 'sk-x******zzzz']);
 step('拒绝把打码串当新密钥写回', refuseMask.error.includes('打码'));
 
-const keepMask = await cliJson(['entry', 'update', secret.id, '--set', 'keyValue=sk-s******cdef', '--set', 'purpose=测试']);
-void keepMask;
-const keepMaskGet = await cliJson(['entry', 'get', secret.id, '--reveal']);
-step('面板原样回传掩码时保留原密文（不把掩码存成新值）', keepMaskGet.values.keyValue === 'sk-smoke-1234567890abcdef');
+const keepMask = await cliJson(['key', 'set', 'SMOKE_KEY', 'sk-s******dcba']);
+step('面板原样回传掩码时保留原密文（不把掩码存成新值）', keepMask.status === 'skipped' && keepMask.unchanged === true);
+const keepMaskGet = await cliJson(['key', 'get', 'SMOKE_KEY', '--reveal']);
+step('掩码回传后明文仍是原值', keepMaskGet.value === 'sk-smoke-NEW-0987654321fedcba');
+
+const missKey = await cliError(['key', 'get', 'NO_SUCH_KEY']);
+step('不存在的密钥报 NOT_FOUND', missKey.code === 'NOT_FOUND');
+const emptyVal = await cliError(['key', 'set', 'EMPTY_ONE', '   ']);
+step('空值被拒绝', emptyVal.code === 'INVALID_INPUT');
+const dashVal = await cliJson(['key', 'set', 'DASH_ONE', '--value=--weird-key--']);
+step('值以 - 开头时用 --value=<值>（显式 flag 覆盖位置参数）', dashVal.status === 'ok');
+await cliJson(['key', 'remove', 'DASH_ONE']);
+
+const dryKeyRemove = await cliJson(['key', 'remove', 'SMOKE_KEY', '--dry-run']);
+step('key remove --dry-run 不落盘', dryKeyRemove.status === 'skipped' && (await cliJson(['key', 'list'])).count === 1);
 
 const dump = await cliJson(['section', 'dump', 'job']);
 step('section dump 给全量（字段 + 条目 + 未填清单）', dump.fields.length > 50 && dump.entries.length >= 1 && dump.entries[0].missing.length > 0);
@@ -215,6 +249,24 @@ step('字面量路由不被 :ref 遮蔽（/sections/templates）', apiTemplates.
 
 const apiFields = await j('/api/entries/fields');
 step('字面量路由不被 :ref 遮蔽（/entries/fields）', apiFields.status === 200 && Array.isArray(apiFields.body.data.sections));
+
+const apiKeyPut = await j('/api/keys/HTTP_KEY', { method: 'PUT', body: { value: 'sk-http-abcdefghijklmn' } });
+step('PUT /api/keys/:name 写入密钥', apiKeyPut.status === 200 && apiKeyPut.body.data.created === true);
+
+const apiKeyGet = await j('/api/keys/HTTP_KEY');
+step('GET /api/keys/:name 默认打码', apiKeyGet.status === 200 && apiKeyGet.body.data.value === 'sk-h******klmn', apiKeyGet.body.data.value);
+
+const apiKeyGetReveal = await j('/api/keys/HTTP_KEY?reveal=1');
+step('GET /api/keys/:name?reveal=1 给明文', apiKeyGetReveal.body.data.value === 'sk-http-abcdefghijklmn');
+
+const apiKeyList = await j('/api/keys');
+step('GET /api/keys 列表', apiKeyList.status === 200 && apiKeyList.body.data.keys.some((k) => k.name === 'HTTP_KEY'));
+
+const apiKeyDel = await j('/api/keys/HTTP_KEY', { method: 'DELETE', body: {} });
+step('DELETE /api/keys/:name', apiKeyDel.status === 200 && apiKeyDel.body.data.removed.title === 'HTTP_KEY');
+
+const apiKeyMissing = await j('/api/keys/NO_SUCH_KEY_HTTP');
+step('不存在的密钥报 404', apiKeyMissing.status === 404 && apiKeyMissing.body.code === 'NOT_FOUND');
 
 const apiAdd = await j('/api/entries', { method: 'POST', body: { section: 'job', set: { 姓名: 'HTTP造的数据' } } });
 step('POST /api/entries', apiAdd.status === 200 && apiAdd.body.data.created === true);

@@ -50,12 +50,18 @@ function resolveFieldDef(section, rawKey) {
   return (section.fields || []).find((x) => x.key === key || x.label === key) || null;
 }
 
-/** 允许 agent 现场扩字段：字典是数据，加一条就够，不必改代码。 */
-function pushField(section, rawKey, taken) {
-  const label = String(rawKey).trim();
-  let key = /^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(label) ? label : `f${(section.fields || []).length + 1}`;
-  while ((section.fields || []).some((x) => x.key === key) || (taken || []).some((x) => x.key === key)) key = `${key}_x`;
-  const def = { key: assertFieldKey(key), label, type: 'text', group: section.groups?.[0]?.id || section.fields?.[0]?.group || 'other' };
+/**
+ * 把一个没见过的键登记进草稿字典。
+ * key 直接用用户敲的那个词（中文也行）——**写什么就存什么**，不必再记一个英文别名。
+ */
+function registerField(section, rawKey, rawValue) {
+  const key = assertFieldKey(String(rawKey).trim());
+  const def = {
+    key,
+    label: key,
+    type: inferFieldType(rawValue),
+    group: section.groups?.[0]?.id || section.fields?.[0]?.group || 'other',
+  };
   section.fields.push(def);
   return def;
 }
@@ -105,25 +111,33 @@ async function prepareValue(section, def, raw, current) {
 }
 
 /**
- * 趟 A：在草稿 section 上解析字段（必要时新建）、算出要写进去的值。
- * 返回 { values, newFields }——newFields 是趟 B 需要补进 section.fields 的定义。
+ * 新字段的类型推断。**刻意不推 number**：
+ * 18 位的身份证号 / 长数字 ID 超过 2^53，推成数字会**静默丢精度**。
+ * 值仍是字符串，所以「直接存 kv」不会因为类型推断损坏数据。
  */
-async function prepareWrite({ section, currentValues = {}, incoming, allowNewField }) {
+function inferFieldType(raw) {
+  if (Array.isArray(raw)) return 'tags';
+  if (typeof raw === 'boolean') return 'bool';
+  const s = String(raw).trim().toLowerCase();
+  if (BOOL_TRUE.includes(s) || BOOL_FALSE.includes(s)) return 'bool';
+  return 'text';
+}
+
+/**
+ * 趟 A：在草稿 section 上解析字段、算出要写进去的值。
+ *
+ * **不认识的键不再报错**——直接登记进字段字典再写。
+ * 字典从「写入的关卡」降级成「已用字段的台账 + 模板给的填写提示」：
+ * 用户想存什么键就存什么键，这才是 KV 该有的手感。
+ */
+async function prepareWrite({ section, currentValues = {}, incoming }) {
   const draft = structuredClone(section);
   const newFields = [];
   const values = {};
   for (const [rawKey, rawValue] of Object.entries(incoming)) {
     let def = resolveFieldDef(draft, rawKey);
     if (!def) {
-      if (!allowNewField) {
-        const near = (section.fields || []).filter((x) => x.label.includes(String(rawKey)) || String(rawKey).includes(x.label)).slice(0, 3);
-        const hint = near.length ? `是不是想写: ${near.map((x) => x.label).join(' / ')}？ ` : '';
-        throw badInput(
-          `栏目「${section.title}」没有字段「${rawKey}」。${hint}`
-          + `用 nx-sk entry fields --section ${section.id} 看全部字段；确实要新增就加 --allow-new-field。`,
-        );
-      }
-      def = pushField(draft, rawKey, newFields);
+      def = registerField(draft, rawKey, rawValue);
       newFields.push(def);
     }
     values[def.key] = await prepareValue(draft, def, rawValue, currentValues[def.key]);
@@ -174,7 +188,7 @@ export async function addEntry({ section, title, set, data, tags, 'dry-run': dry
     throw badInput(`至少要给一个字段：--set ${sec.fields[0]?.label || '字段'}=值（可重复），或 --data @file.json`);
   }
 
-  const { values, newFields } = await prepareWrite({ section: sec, incoming, allowNewField: false });
+  const { values, newFields } = await prepareWrite({ section: sec, incoming });
   const finalTitle = String(title || autoTitle(sec, values) || '').trim();
   if (!finalTitle) {
     throw badInput(`无法确定条目名：加 --title <名>，或先填上「${sec.titleField || '首个字段'}」字段`);
@@ -217,7 +231,7 @@ export async function updateEntry(ref, patch = {}) {
   }
 
   const { values, newFields } = await prepareWrite({
-    section: sec, currentValues: target.values, incoming, allowNewField: patch['allow-new-field'],
+    section: sec, currentValues: target.values, incoming,
   });
 
   if (dryRun) {
@@ -286,7 +300,148 @@ export async function fieldDictionary({ section } = {}) {
   return { count: store.sections.length, sections: store.sections.map(shape) };
 }
 
-/** dry-run 预览：密文字段照样打码，别把「试运行」变成泄密口子。 */
+/**
+ * KV 直通命令（`key *`）——「存个密钥」不该先说 `--section` 再说 `--set 字段=`。
+ *
+ * 设计要点：这**不是**第二套业务逻辑。下面每个函数都只是把
+ * 「哪个栏目 + 哪个值字段」定好，再调 addEntry / updateEntry / removeEntry 本身。
+ * 所以加解密、打码、快照、--dry-run 全部只有一份实现，不可能与 `entry` 命令分叉。
+ */
+async function kvTarget(store) {
+  const wanted = store.settings.kvSection || 'secret';
+  const sec = findSection(store, wanted);
+  if (!sec) {
+    throw notFound(`KV 栏目不存在: ${wanted} —— 改指向别的栏目用 'nx-sk setting set --key kvSection --value <栏目id>'，`
+      + `或先建一个单字段栏目。现有: ${sectionNames(store)}`);
+  }
+  const named = (sec.fields || []).find((x) => x.key === 'value');
+  if (named) return { sec, valueKey: named.key };
+  if (!sec.fields || !sec.fields.length) throw badInput(`栏目「${sec.title}」没有任何字段，不能当 KV 用`);
+  if (sec.fields.length > 1) {
+    throw badInput(`栏目「${sec.title}」有 ${sec.fields.length} 个字段，不是 KV；`
+      + `把 settings.kvSection 指向单字段栏目，或给它加一个 key 叫 value 的字段。`);
+  }
+  return { sec, valueKey: sec.fields[0].key };
+}
+
+/** KV 名称不是文件路径，所以比 assertSafeName 宽松：允许中文与空格，只挡路径分隔符。 */
+function assertKeyName(name) {
+  const s = String(name ?? '').trim();
+  if (!s) throw badInput('密钥名不能为空：nx-sk key set <名称> <值>');
+  if (s.length > 64) throw badInput(`密钥名过长（${s.length} > 64）: ${s}`);
+  if (s.includes('/') || s.includes('\\') || s.includes('..')) {
+    throw badInput(`密钥名不能含路径分隔符或 '..': ${JSON.stringify(name)}`);
+  }
+  return s;
+}
+
+export async function keyList({ reveal } = {}) {
+  const store = await loadStore();
+  const { sec, valueKey } = await kvTarget(store);
+  const mine = store.entries.filter((e) => e.section === sec.id);
+  const decrypt = await sensitiveViewer(sec, mine);
+  return {
+    section: sec.id,
+    sectionTitle: sec.title,
+    valueKey,
+    reveal: !!reveal,
+    count: mine.length,
+    keys: mine.map((e) => ({
+      id: e.id,
+      name: e.title,
+      value: displaySensitive(e.values?.[valueKey], { reveal: !!reveal, decrypt }),
+      updatedAt: e.updatedAt,
+    })),
+  };
+}
+
+export async function keyGet(name, { reveal } = {}) {
+  const store = await loadStore();
+  const { sec, valueKey } = await kvTarget(store);
+  const key = assertKeyName(name);
+  const entry = store.entries.find((e) => e.section === sec.id && e.title === key);
+  if (!entry) throw notFound(`没有这个密钥: ${key}（用 'nx-sk key list' 看现有的）`);
+  const decrypt = await sensitiveViewer(sec, [entry]);
+  return {
+    id: entry.id,
+    name: entry.title,
+    section: sec.id,
+    value: displaySensitive(entry.values?.[valueKey], { reveal: !!reveal, decrypt }),
+    reveal: !!reveal,
+    updatedAt: entry.updatedAt,
+  };
+}
+
+/**
+ * KV 的 SET 语义：不存在就建，存在就**覆盖**。
+ * 这与 `entry add` 的「重名报 CONFLICT」是刻意不同的——`set` 这个名字本身就说明是覆盖，
+ * 返回值里带 `created` 让调用方知道到底发生了哪一种。
+ */
+export async function keySet(name, value, { 'dry-run': dryRun } = {}) {
+  const key = assertKeyName(name);
+  const raw = value === undefined || value === null ? '' : String(value);
+  if (!raw.trim()) throw badInput(`密钥值不能为空：nx-sk key set ${key} <值>`);
+
+  const store = await loadStore();
+  const { sec, valueKey } = await kvTarget(store);
+
+  const existing = store.entries.find((e) => e.section === sec.id && e.title === key);
+  if (existing) {
+    // 两种「没变」都要认出来，否则会产生无意义的新密文 + 新快照：
+    //   ① 明文与现值相同（重复写同一个 key 是常态，agent 会重试）
+    //   ② 传进来的是**打码占位**（面板把列表里的值原样回传）
+    const decrypt = await sensitiveViewer(sec, [existing]);
+    if (decrypt) {
+      try {
+        const plain = String(decrypt(existing.values?.[valueKey]));
+        if (plain === raw || maskValue(plain) === raw) {
+          return { status: 'skipped', created: false, unchanged: true, name: key, section: sec.id, id: existing.id };
+        }
+      } catch { /* 解不开（换过密钥）就按覆盖处理 */ }
+    }
+    const r = await updateEntry(existing.title, { set: { [valueKey]: raw }, section: sec.id, 'dry-run': dryRun });
+    if (r.status === 'skipped') return { ...r, name: key, created: false, section: sec.id };
+    return { status: 'ok', created: false, replaced: true, name: key, section: sec.id, id: r.id, snapshot: r.snapshot };
+  }
+
+  const r = await addEntry({ section: sec.id, title: key, set: { [valueKey]: raw }, 'dry-run': dryRun });
+  if (r.status === 'skipped') return { ...r, name: key, created: true, section: sec.id };
+  return { status: 'ok', created: true, replaced: false, name: key, section: sec.id, id: r.id };
+}
+
+export async function keyRemove(name, { 'dry-run': dryRun } = {}) {
+  const store = await loadStore();
+  const { sec } = await kvTarget(store);
+  const key = assertKeyName(name);
+  const entry = store.entries.find((e) => e.section === sec.id && e.title === key);
+  if (!entry) throw notFound(`没有这个密钥: ${key}`);
+  return removeEntry(entry.id, { 'dry-run': dryRun });
+}
+
+// —— CLI 人读渲染（KV 系列） ——
+export function renderKeyList(d) {
+  const lines = [`${d.count} 个密钥 · 栏目 ${d.section}${d.reveal ? ' · 含明文' : ' · 值已打码'}`];
+  for (const k of d.keys) lines.push(`  ${String(k.name).padEnd(24)} ${k.value}`);
+  lines.push('', `取值: nx-sk key get <名称> --reveal　　写入: nx-sk key set <名称> <值>`);
+  return lines.join('\n');
+}
+
+export function renderKeyGet(d) {
+  return `${d.name} = ${d.value}${d.reveal ? '' : '\n（值已打码；加 --reveal 看明文）'}`;
+}
+
+export function renderKeySet(d) {
+  if (d.status === 'skipped' && d.unchanged) return `未改动：${d.name} 的值与现有值相同`;
+  if (d.status === 'skipped') return `试运行（未落盘）：${JSON.stringify(d.wouldCreate || d.wouldChange)}`;
+  return `${d.created ? '已新建' : '已覆盖'}密钥 ${d.name}（栏目 ${d.section}）`
+    + `${d.snapshot ? `\n快照: ${d.snapshot}` : ''}\n值已密文落盘；核对用 nx-sk key get ${d.name} --reveal`;
+}
+
+export function renderKeyRemove(d) {
+  if (d.status === 'skipped') return `试运行（未落盘）：${JSON.stringify(d.wouldRemove)}`;
+  return `已删除密钥 ${d.removed.title}\n快照: ${d.snapshot}`;
+}
+
 function maskAll(section, entry, decrypt) {
   const out = {};
   for (const [k, v] of Object.entries(entry.values)) {

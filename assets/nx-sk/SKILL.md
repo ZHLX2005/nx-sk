@@ -12,13 +12,16 @@ description: 本机个人资源管理器——栏目化存储个人信息（求�
 | 栏目 | id | 内容 |
 | --- | --- | --- |
 | 求职 | `job` | 求职用的个人信息档案（姓名/学历/求职意向…约 70 个字段） |
-| 密钥 | `secret` | 大模型 API Key 等凭据，值以 AES-256-GCM 密文落盘 |
+| 密钥 | `secret` | **极简 KV：名称 → 密钥值**。值以 AES-256-GCM 密文落盘 |
 
 ## 核心不变量
 
-1. **栏目 = 一组同构条目 + 一份字段字典。字典是数据，不是代码。**
-   字段字典随栏目存在 store 里，所以 agent 与面板看到的字段永远一致。
-   *违反会怎样*：凭记忆猜字段名写 `--set 手机号=...`，而字典里叫 `phone/电话` —— 会报 `INVALID_INPUT` 并给出最接近的候选。
+1. **栏目 = 一组同构条目 + 一份字段台账。台账是数据，不是代码。**
+   字典随栏目存在 store 里，所以 agent 与面板看到的字段永远一致。
+   **它不拦写入**：`--set 任意键=值` 一律能存，没见过的键会自动登记（键名就是它本身，
+   中文也可以）。台账的用处是「模板建议 + 你实际写过什么」，不是门禁。
+   *违反会怎样*：如果把它做成门禁，用户每换一个表单就要先改一次 schema ——
+   而那正是「只想存个 kv」时最不想付的成本。
 
 2. **一条 action 同时声明 CLI 与 HTTP。** 面板上能做的，CLI 都能做；两边参数名、错误码一致。
    *违反会怎样*：只能靠字符串匹配猜错误，无法可靠分支。
@@ -33,16 +36,31 @@ description: 本机个人资源管理器——栏目化存储个人信息（求�
 nx-sk bootstrap --json        # 版本 / 存储路径 / 栏目 / 设置 / 命令表，一次拿齐
 ```
 
-零知识时的三条主力命令：
+零知识时的主力命令：
 
 ```bash
-nx-sk entry fields --section job --json              # ① 先看字段字典：key / label / type / 候选值
-nx-sk section dump job --json                        # ② 一个栏目的全部信息：字段 + 全部条目 + 每个条目的未填清单
-nx-sk entry update <条目id或条目名> --set 字段=值     # ③ PATCH 语义：只改传入字段，未传的保持原值
+nx-sk entry fields --section job --json              # ① 看台账：模板建议字段 + 你写过什么
+nx-sk entry update <条目id或条目名> --set 字段=值     # ② 直接写：字典里没有的键会自动登记
+nx-sk section dump job --json                        # ③ 一个栏目的全部信息 + 每个条目的未填清单
 ```
+
+**键就是键**：`--set 微信=xxx` 存下去就是 `微信`，不需要先翻译成英文 key。
 
 `--set` 的键**可以用 key 也可以用中文标签**（`--set 电话=138…` 与 `--set phone=138…` 等价）。
 一次写很多字段用 `--data @file.json`（`--data` 也接受内联 JSON）。
+
+存/取密钥（KV）走这四条，别用 `entry --set value=` 绕一圈：
+
+```bash
+nx-sk key set OPENAI_KEY sk-xxxxxxxx     # 写入（存在即覆盖，返回 created 告诉你是哪种）
+nx-sk key get OPENAI_KEY                 # 取值，默认打码
+nx-sk key get OPENAI_KEY --reveal         # 显式揭示明文
+nx-sk key list                            # 所有键（值打码）
+nx-sk key remove OPENAI_KEY               # 删除，写前自动留快照
+```
+
+`key *` 是 `entry *` 的**语法糖**（同模块、同一批 service 函数），作用在 `settings.kvSection`
+指向的单字段栏目上（默认 `secret`）。区别只有一个：`key set` 遇到同名是**覆盖**，`entry add` 是报 `CONFLICT`。
 
 ## ref 路由表（按需加载）
 

@@ -5,7 +5,7 @@ import { useTempHome } from '../helpers.mjs';
 await useTempHome();
 
 const { applySpec, argSpecsOf, cliPathsOf, compileRoute, compareRoutes, flagSpecsOf, usageOf } = await import('../../src/runtime/spec.js');
-const { loadStore, normalize } = await import('../../src/core/store.js');
+const { loadStore, migrationNote, normalize } = await import('../../src/core/store.js');
 const { seedSections } = await import('../../src/core/fields.js');
 
 const FAKE = {
@@ -114,4 +114,59 @@ test('seedSections：默认栏目字段字典非空且带分组', () => {
   assert.ok(job.fields.length > 50, `求职栏目字段应足够全，实际 ${job.fields.length}`);
   assert.ok(job.groups.length >= 5);
   assert.equal(job.titleField, 'name');
+});
+
+test('v1 → v2 迁移：密钥栏目缩成 KV，旧值不删，且先留原始快照', async () => {
+  const fsp = await import('node:fs/promises');
+  const { join } = await import('node:path');
+  const dir = process.env.NX_SK_HOME;
+  const p = join(dir, 'store.json');
+
+  const v1 = {
+    version: 1,
+    settings: {},
+    sections: [{
+      id: 'secret', title: '密钥', description: 'old', order: 20, template: 'secret',
+      titleField: 'provider', titleLabel: '密钥名',
+      groups: [{ id: 'key', title: '密钥信息' }],
+      fields: [
+        { key: 'provider', label: '服务商', type: 'select', group: 'key' },
+        { key: 'keyValue', label: '密钥值', type: 'secret', group: 'key' },
+        { key: 'model', label: '模型标识', type: 'text', group: 'key' },
+      ],
+    }],
+    entries: [{
+      id: 'e_old', section: 'secret', title: 'OpenAI', tags: [],
+      values: { provider: 'OpenAI', keyValue: 'sk-old-123', model: 'gpt-4o' },
+    }],
+  };
+  await fsp.writeFile(p, JSON.stringify(v1, null, 2), 'utf8');
+
+  const migrated = await loadStore(p);
+  const sec = migrated.sections.find((x) => x.id === 'secret');
+  assert.equal(migrated.version, 2, '迁移后版本号必须落到 2，否则每次读盘都会重跑');
+  assert.deepEqual(sec.fields.map((f) => f.key), ['value'], '字典缩成单字段 KV');
+  assert.equal(sec.titleField, null);
+  assert.equal(migrated.entries[0].values.value, 'sk-old-123', 'keyValue 的值要搬到 value');
+  assert.equal(migrated.entries[0].values.model, 'gpt-4o', '其它旧值**不能删**——不再显示 ≠ 删掉');
+  assert.equal(migrated.entries[0].values.provider, 'OpenAI');
+
+  const note = migrationNote();
+  assert.ok(note && note.from === 1 && note.to === 2, '迁移要留可展示的记录');
+  const snap = await fsp.readFile(note.snapshotRaw, 'utf8');
+  assert.equal(JSON.parse(snap).version, 1, '快照必须是**迁移前**的原始文件，否则退回也没用');
+
+  const onDisk = JSON.parse(await fsp.readFile(p, 'utf8'));
+  assert.equal(onDisk.version, 2, '迁移要就地落盘（幂等靠这个）');
+
+  const before = (await fsp.readdir(join(dir, 'backup'))).length;
+  await loadStore(p);
+  const after = (await fsp.readdir(join(dir, 'backup'))).length;
+  assert.equal(after, before, '第二次读盘不该再迁移、再留快照');
+});
+
+test('正规的 v2 store 不会被迁移触碰', () => {
+  const s = normalize({ version: 2, settings: {}, sections: [], entries: [] });
+  assert.equal(s._migration, undefined);
+  assert.equal(s.version, 2);
 });

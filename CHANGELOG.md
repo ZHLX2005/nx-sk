@@ -2,6 +2,47 @@
 
 本文件格式参考 [Keep a Changelog](https://keepachangelog.com/)，中文正文。
 
+## [0.2.0] - 2026-09-24
+
+### Changed
+
+- **【破坏性】密钥栏目从 8 字段缩成极简 KV**：只保留「名称（条目名）→ 值」。
+  删掉了服务商 / 接口地址 / 模型 / 用途 / 有效期 / 额度 / 备注 ——
+  存一个 key 不该先填一张表；「这个 key 干什么用」写进键名里就够了。
+  - **自动迁移**：`store.json` 版本升到 `2`。首次读盘时把旧 `keyValue` 的值搬到 `value`，
+    并**先留一份迁移前的原始文件快照**到 `~/nx-sk/backup/…-migrate-v1-to-v2.json`；
+    其余旧值**不删除**（不再显示 ≠ 删掉），`bootstrap --json` 的 `migration` 字段会报告迁移结果。
+  - 迁移幂等：`version` 落盘后不再触发。
+
+### Added
+
+- **字段台账不再拦写入**：`--set 任意键=值` 一律能存，没见过的键自动登记
+  （键名就是字段名，**中文也可以**；类型按值推断：`是/否` → bool、数组 → tags、其余 → text）。
+  `--allow-new-field` 随之取消（它现在是默认行为）。
+  **刻意不推 number**：18 位身份证号这类长数字超过 2^53，推成数字会静默丢精度。
+- **面板加「KV 直填」行**：敲 `字段=值` 回车即写入，不再必须先在分组表单里找到那一格；
+  「未填 N 项」也从告警口吻改成中性的「模板建议里还有 N 项没填（不影响使用）」。
+- `assertFieldKey` 放宽到允许中文（仍挡空白 / 路径分隔符 / `..`），
+  这样 `--set 微信号=xxx` 存下去就是 `微信号`，不必再记一个英文别名。
+- **`key` 系列命令（KV 直通）**：`key set <名称> <值>` / `key get <名称> [--reveal]` /
+  `key list [--reveal]` / `key remove <名称>`，对应接口
+  `PUT /api/keys/:name` / `GET /api/keys/:name` / `GET /api/keys` / `DELETE /api/keys/:name`。
+  - `key *` 是 `entry *` 的**语法糖**，与 `entry` 同模块、共用同一批 service 函数
+    （加解密 / 打码 / 快照 / `--dry-run` 只有一份实现），有一致性测试钉住「不许另起一套」。
+  - `key set` 是 **SET 语义**（同名覆盖，返回值带 `created`）。这是它与 `entry add`
+    （同名报 `CONFLICT`）唯一刻意的差别。
+  - 重复写同一个值 → `{ status: 'skipped', unchanged: true }`，不重写密文、不留快照。
+  - 作用栏目由新设置项 `settings.kvSection` 决定（默认 `secret`）。
+- CLI 位置参数与 flag 的优先级明确为**显式 flag 覆盖位置参数**，
+  于是 `key set K <值>` 与 `key set K --value=<值>` 等价 ——
+  后者是值以 `-` 开头时唯一可用的写法。
+
+### Fixed
+
+- `cli.js` 的 `parseArgs` 原本让位置参数覆盖同名的显式 flag，导致 `--value=` 被静默忽略。
+- `key set` 的「值没变」判定原本只比明文，面板原样回传打码值时会被误判成覆盖
+  （多写一次密文 + 多留一份快照）。现在明文相同与掩码相同都算「未改动」。
+
 ## [0.1.0] - 2026-09-24
 
 首个版本：本机个人资源管理器（server-cli-web 骨架的完整实现）。

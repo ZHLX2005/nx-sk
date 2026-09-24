@@ -76,13 +76,18 @@ nx-sk entry update 张三 --data @补全.json
 nx-sk section dump job --json                    # ③ 复核：完整度 + 未填清单
 ```
 
-存一个大模型 key（**值不会以明文进 store.json**）：
+存一个大模型 key —— 密钥栏目就是**极简 KV：名称 → 值**（**值不会以明文进 store.json**）：
 
 ```bash
-nx-sk entry add --section secret --set provider=OpenAI --set keyValue=sk-xxxx
-nx-sk entry get OpenAI --json            # 默认打码：sk-x******xxxx
-nx-sk entry get OpenAI --json --reveal   # 显式揭示明文
+nx-sk key set OPENAI_KEY sk-xxxxxxxx     # 写入：不存在则新建，存在则覆盖
+nx-sk key get OPENAI_KEY                 # 取值，默认打码：sk-x******xxxx
+nx-sk key get OPENAI_KEY --reveal         # 显式揭示明文
+nx-sk key list                            # 所有键（值打码）
+nx-sk key remove OPENAI_KEY               # 删除，写前自动留快照
 ```
+
+状态与栏目一样：`key *` 只是 `entry *` 的语法糖（同模块、同一批 service 函数），
+作用在 `settings.kvSection` 指向的单字段栏目上（默认 `secret`）。
 
 整体导出（凭据默认打码，`--with-secrets` 才出明文）：
 

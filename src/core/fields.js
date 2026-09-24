@@ -105,17 +105,11 @@ const JOB_FIELDS = [
   f('unionVolunteer', '是否自愿加入公司工会', 'bool', 'extra'),
 ];
 
+// 密钥栏目刻意只有**一个**字段：名称（条目名）+ 值。
+// 之前做过 8 个字段（服务商/接口地址/模型/用途/有效期/额度/备注），实测是负担——
+// 存一个 key 不该先填一张表。要记「这个 key 干什么用」，把它写进名称里就够。
 const SECRET_FIELDS = [
-  f('provider', '服务商', 'select', 'key', {
-    options: ['OpenAI', 'Anthropic', 'Google', 'DeepSeek', 'Moonshot 月之暗面', '阿里云通义', '字节豆包', '智谱 GLM', '百度文心', '腾讯混元', '硅基流动', 'OpenRouter', '其他'],
-  }),
-  f('keyValue', '密钥值', 'secret', 'key', { hint: 'API Key，密文落盘；列表与导出默认只显示首尾' }),
-  f('baseUrl', '接口地址', 'text', 'key', { hint: '自定义 Base URL，留空用官方默认' }),
-  f('model', '模型标识', 'text', 'key', { hint: '例如 gpt-4o-mini / claude-sonnet-4 / deepseek-chat' }),
-  f('purpose', '用途', 'text', 'key', { hint: '这个 key 用来做什么' }),
-  f('expiresAt', '有效期', 'date', 'key'),
-  f('quota', '额度/计费', 'text', 'key', { hint: '额度或计费提示' }),
-  f('note', '备注', 'textarea', 'key'),
+  f('value', '密钥值', 'secret', 'key', { hint: 'API Key 本身。密文落盘；列表与导出默认只显示首尾' }),
 ];
 
 const TEMPLATES = {
@@ -141,8 +135,8 @@ const TEMPLATES = {
   secret: {
     id: 'secret',
     label: '密钥 / 凭据',
-    description: '大模型 API Key 与其它凭据：密文字段落盘，只有在显式揭示或带 --with-secrets 导出时才出现明文。',
-    titleField: 'provider',
+    description: '极简 KV：名称 → 密钥值。值以密文落盘，只有在显式揭示或带 --with-secrets 导出时才出现明文。',
+    titleField: null,
     titleLabel: '密钥名',
     groups: [{ id: 'key', title: '密钥信息' }],
     fields: SECRET_FIELDS,

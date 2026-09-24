@@ -1,13 +1,14 @@
-// 状态读写：原子写 + 按 mtime 失效的缓存 + 读-改-写事务。
+// 状态读写：原子写 + 按 mtime 失效的缓存 + 读-改-写事务 + 版本迁移。
 // 所有模块都通过这里碰磁盘，不自己拼路径、不自己 JSON.parse。
 import fsp from 'node:fs/promises';
 import { join } from 'node:path';
-import { snapshotDir, storeFile } from './paths.js';
+import { displayPath, snapshotDir, storeFile } from './paths.js';
 import { ensureDir, pathExists, writeAtomic, writeJsonAtomic } from './fsx.js';
-import { seedSections } from './fields.js';
+import { instantiateTemplate, seedSections } from './fields.js';
 import { nowIso, stamp } from './ids.js';
 
-export const STORE_VERSION = 1;
+/** v2：密钥栏目从 8 字段模板改成单字段 KV（名称 → 值）。 */
+export const STORE_VERSION = 2;
 export const MAX_SNAPSHOTS = 20;
 export const MAX_EXPORT_HISTORY = 30;
 
@@ -17,6 +18,7 @@ export function defaultSettings() {
     exportFormat: 'both', // json | md | both
     includeSecretsInExport: false,
     defaultSection: 'job',
+    kvSection: 'secret', // `key` 系列命令作用在哪个栏目上
   };
 }
 
@@ -63,14 +65,64 @@ function normalizeEntry(raw) {
   };
 }
 
+// v1 的密钥模板字段。迁移时**不动 values 里这些键**——只把 keyValue 搬到 value，
+// 并把字典缩成单字段。「不再显示」和「删掉」是两件事：删掉就再也找不回来了。
+const LEGACY_SECRET_KEYS = ['keyValue', 'provider', 'baseUrl', 'model', 'purpose', 'expiresAt', 'quota', 'note'];
+
+/**
+ * v1 → v2：把「密钥」栏目从 8 字段模板迁成单字段 KV。
+ *
+ * 幂等：只有 `version < 2` 才调用，且落盘后 version 变 2，不会再触发。
+ */
+function migrateSecretToKv(store) {
+  const sec = store.sections.find((s) => s.id === 'secret');
+  if (!sec) return null;
+  const looksLegacy = sec.fields.some((x) => LEGACY_SECRET_KEYS.includes(x.key))
+    && !sec.fields.some((x) => x.key === 'value');
+  if (!looksLegacy) return null;
+
+  const tpl = instantiateTemplate('secret', { id: sec.id, title: sec.title, order: sec.order });
+  const moved = [];
+  for (const e of store.entries.filter((x) => x.section === sec.id)) {
+    const v = e.values || (e.values = {});
+    const empty = v.value === undefined || v.value === null || v.value === '';
+    if (empty && v.keyValue !== undefined && v.keyValue !== null && v.keyValue !== '') {
+      v.value = v.keyValue;
+      moved.push(e.id);
+    }
+  }
+  sec.groups = tpl.groups;
+  sec.fields = tpl.fields;
+  sec.titleField = tpl.titleField;
+  sec.titleLabel = tpl.titleLabel;
+  sec.template = 'secret';
+  sec.description = tpl.description;
+  sec.updatedAt = nowIso();
+
+  const stillHolding = store.entries
+    .filter((e) => e.section === sec.id)
+    .reduce((n, e) => n + LEGACY_SECRET_KEYS.filter((k) => k !== 'keyValue'
+      && e.values?.[k] !== undefined && e.values?.[k] !== null && e.values?.[k] !== '').length, 0);
+
+  return {
+    section: sec.id,
+    fieldsBefore: LEGACY_SECRET_KEYS.length + 1,
+    fieldsAfter: tpl.fields.length,
+    entries: store.entries.filter((e) => e.section === sec.id).length,
+    movedValues: moved.length,
+    legacyValuesKept: stillHolding,
+  };
+}
+
 export function normalize(data) {
   if (!data || typeof data !== 'object') return emptyStore(true);
   const base = emptyStore(false);
-  base.version = Number.isFinite(data.version) ? data.version : STORE_VERSION;
+  base.version = STORE_VERSION;
   base.settings = { ...base.settings, ...(data.settings && typeof data.settings === 'object' ? data.settings : {}) };
   base.sections = (Array.isArray(data.sections) ? data.sections : []).map(normalizeSection).filter(Boolean);
   base.entries = (Array.isArray(data.entries) ? data.entries : []).map(normalizeEntry).filter(Boolean);
   base.exports = Array.isArray(data.exports) ? data.exports.slice(0, MAX_EXPORT_HISTORY) : [];
+  if (Number(data.version || 1) < 2) base._migration = migrateSecretToKv(base);
   return base;
 }
 
@@ -78,6 +130,7 @@ let cache = null;
 let cachePath = null;
 let cacheMtime = -1;
 let cacheCorruptNote = null;
+let cacheMigrationNote = null;
 
 export function storePathInUse() {
   return storeFile();
@@ -86,6 +139,11 @@ export function storePathInUse() {
 /** 最近一次读盘时把损坏文件挪走的记录（bootstrap / health 会展示）。 */
 export function corruptNote() {
   return cacheCorruptNote;
+}
+
+/** 最近一次数据迁移的记录（含原始快照路径），供 bootstrap 展示。 */
+export function migrationNote() {
+  return cacheMigrationNote;
 }
 
 export async function loadStore(explicitPath) {
@@ -105,7 +163,29 @@ export async function loadStore(explicitPath) {
       try { await fsp.rename(p, corrupt); } catch { /* 尽力 */ }
       cacheCorruptNote = { from: p, to: corrupt, error: String(e && e.message) };
     }
-    cache = normalize(parsed);
+    const oldVersion = Number((parsed && parsed.version) || 1);
+    const next = normalize(parsed);
+
+    if (!corrupt && oldVersion < STORE_VERSION && next._migration) {
+      // 迁移前先把**原始文件**原样留一份（不是迁移后的），出问题能整份退回
+      const snapshot = join(snapshotDir(), `${stamp()}-migrate-v${oldVersion}-to-v${STORE_VERSION}.json`);
+      await ensureDir(snapshotDir());
+      try { await fsp.copyFile(p, snapshot); } catch { /* 尽力 */ }
+      cacheMigrationNote = {
+        from: oldVersion,
+        to: STORE_VERSION,
+        snapshot: displayPath(snapshot),
+        snapshotRaw: snapshot,
+        ...next._migration,
+      };
+      delete next._migration;
+      // 就地落盘：version 写进去之后就不会再迁移（幂等）
+      await saveStore(next, p);
+      return next;
+    }
+
+    delete next._migration;
+    cache = next;
     cachePath = p;
     // 解析失败时文件已被挪走，mtime 用 -1 强制下次重新判断
     cacheMtime = corrupt ? -1 : st.mtimeMs;
@@ -121,12 +201,14 @@ export async function loadStore(explicitPath) {
 export async function saveStore(next, explicitPath) {
   const p = explicitPath || storeFile();
   const data = normalize(next);
+  delete data._migration;
   await ensureDir(join(p, '..'));
   // 原子写：临时文件 + rename。中断时用户要么看到旧数据，要么看到新数据。
   await writeAtomic(p, JSON.stringify(data, null, 2) + '\n');
   cache = data;
   cachePath = p;
-  try { cacheMtime = (await fsp.stat(p)).mtimeMs; } catch { cacheMtime = -1; }
+  cacheMtime = -1;
+  try { cacheMtime = (await fsp.stat(p)).mtimeMs; } catch { /* 保持 -1 */ }
   return data;
 }
 

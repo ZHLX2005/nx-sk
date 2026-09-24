@@ -17,6 +17,7 @@ export default function SectionView({ sectionId }) {
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState(null);
   const [modal, setModal] = useState(null);
+  const [quick, setQuick] = useState('');
   const reveal = !!ui.reveal;
 
   const load = useCallback(async (keepId) => {
@@ -65,6 +66,20 @@ export default function SectionView({ sectionId }) {
     if (dirty.titleChanged) body.title = draft.title;
     await api(`/api/entries/${encodeURIComponent(draft.id)}`, { method: 'PATCH', body });
     toast(`已保存 ${dirty.count} 处改动`);
+    await load(draft.id);
+    await reload();
+  });
+
+  // 「直接存 kv」的入口：敲一行 字段=值 回车即写入，字典里没有的键会自动登记
+  const quickAdd = guard(async () => {
+    if (!draft) { toast('先新建一条条目', 'bad'); return; }
+    const i = quick.indexOf('=');
+    if (i <= 0) { toast('用 字段=值 的格式，例如 微信=zhangsan', 'bad'); return; }
+    const k = quick.slice(0, i).trim();
+    const v = quick.slice(i + 1);
+    const r = await api(`/api/entries/${encodeURIComponent(draft.id)}`, { method: 'PATCH', body: { set: { [k]: v } } });
+    setQuick('');
+    toast(`已写入 ${k}${r.newFields?.length ? '（新字段已登记）' : ''}`);
     await load(draft.id);
     await reload();
   });
@@ -172,6 +187,18 @@ export default function SectionView({ sectionId }) {
                 </div>
               </div>
 
+              <div className="rowgap" style={{ padding: '6px 14px', borderBottom: '1px solid var(--soft-2)' }}>
+                <input
+                  className="grow"
+                  style={{ minWidth: 220 }}
+                  placeholder="直接加字段：字段=值　（回车写入；没见过的键会自动登记）"
+                  value={quick}
+                  onChange={(e) => setQuick(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') quickAdd(); }}
+                />
+                <button className="btn small" onClick={quickAdd} disabled={!quick.includes('=')}>写入</button>
+              </div>
+
               {groups.map((g) => (
                 <FieldGroup key={g.id} title={g.title} fields={g.fields} draft={draft.values} onPatch={patchField} />
               ))}
@@ -181,7 +208,7 @@ export default function SectionView({ sectionId }) {
                 <button className="btn ghost" onClick={() => load(draft.id)} disabled={!dirty.count}>放弃改动</button>
                 <button className="btn ghost" onClick={removeEntry}>删除条目</button>
                 {current?.missing.length ? (
-                  <span className="hint after">未填 {current.missing.length} 项：{current.missing.slice(0, 5).map((m) => m.label).join('、')}{current.missing.length > 5 ? '…' : ''}</span>
+                  <span className="hint">模板建议里还有 {current.missing.length} 项没填（不影响使用）：{current.missing.slice(0, 5).map((m) => m.label).join('、')}{current.missing.length > 5 ? '…' : ''}</span>
                 ) : null}
               </div>
             </div>

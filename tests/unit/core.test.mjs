@@ -99,14 +99,14 @@ test('completeness：给出已填数与未填字段清单', () => {
 test('serializeEntry：密文字段打码，reveal 时出明文', () => {
   const entry = {
     id: 'e_1', section: 'secret', title: 'OpenAI 主号', tags: [],
-    values: { provider: 'OpenAI', keyValue: 'sk-1234567890abcdef' },
+    values: { value: 'sk-1234567890abcdef' },
     createdAt: null, updatedAt: null,
   };
   const masked = serializeEntry(SEC, entry);
-  assert.equal(masked.values.keyValue, 'sk-1******cdef');
+  assert.equal(masked.values.value, 'sk-1******cdef');
   const shown = serializeEntry(SEC, entry, { reveal: true });
-  assert.equal(shown.values.keyValue, 'sk-1234567890abcdef');
-  assert.equal(shown.values.provider, 'OpenAI', '非密文字段不受影响');
+  assert.equal(shown.values.value, 'sk-1234567890abcdef');
+  assert.deepEqual(Object.keys(shown.values), ['value'], '密钥栏目就一个字段：KV');
 });
 
 test('displaySensitive：密文对象必须靠注入的 decrypt 才能出明文', () => {
@@ -124,11 +124,11 @@ test('displaySensitive：密文对象必须靠注入的 decrypt 才能出明文'
 
 test('serializeEntry：密文对象经 decrypt 后按 reveal 决定是否打码', () => {
   const key = newKey();
-  const entry = { id: 'e_2', section: 'secret', title: 'x', tags: [], values: { keyValue: encryptValue(key, 'sk-live-abcdefghijklmn') } };
+  const entry = { id: 'e_2', section: 'secret', title: 'x', tags: [], values: { value: encryptValue(key, 'sk-live-abcdefghijklmn') } };
   const decrypt = (b) => decryptValue(key, b);
-  assert.equal(serializeEntry(SEC, entry, { decrypt }).values.keyValue, 'sk-l******klmn');
-  assert.equal(serializeEntry(SEC, entry, { decrypt, reveal: true }).values.keyValue, 'sk-live-abcdefghijklmn');
-  assert.equal(serializeEntry(SEC, entry).values.keyValue, '[已加密]');
+  assert.equal(serializeEntry(SEC, entry, { decrypt }).values.value, 'sk-l******klmn');
+  assert.equal(serializeEntry(SEC, entry, { decrypt, reveal: true }).values.value, 'sk-live-abcdefghijklmn');
+  assert.equal(serializeEntry(SEC, entry).values.value, '[已加密]');
 });
 
 test('formatValue：bool / tags / 空值 的人读形态一致', () => {
@@ -140,16 +140,16 @@ test('formatValue：bool / tags / 空值 的人读形态一致', () => {
 });
 
 test('dumpSection：字段字典带 sensitive 标记，值未被 reveal 时打码', () => {
-  const entry = { id: 'e_9', section: 'secret', title: 'x', tags: [], values: { keyValue: 'sk-abcdefghijklmnop' } };
+  const entry = { id: 'e_9', section: 'secret', title: 'x', tags: [], values: { value: 'sk-abcdefghijklmnop' } };
   const d = dumpSection(SEC, [entry]);
   assert.equal(d.section.id, 'secret');
-  assert.equal(d.fields.find((f) => f.key === 'keyValue').sensitive, true);
-  assert.equal(d.entries[0].values.keyValue.includes('abcdefghij'), false);
+  assert.equal(d.fields.find((f) => f.key === 'value').sensitive, true);
+  assert.equal(d.entries[0].values.value.includes('abcdefghij'), false);
   assert.equal(d.count, 1);
 });
 
 test('isSensitiveField：type=secret 与显式 sensitive 都算密文', () => {
-  assert.equal(isSensitiveField(SEC, 'keyValue'), true);
+  assert.equal(isSensitiveField(SEC, 'value'), true);
   assert.equal(isSensitiveField(JOB, 'name'), false);
 });
 
@@ -165,4 +165,12 @@ test('groupFields：按字段顺序产出分组，不丢字段', () => {
   const total = groups.reduce((n, g) => n + g.fields.length, 0);
   assert.equal(total, JOB.fields.length);
   assert.equal(groups[0].id, 'basic');
+});
+
+test('密钥模板是严格的 KV：一个字段 + 条目名就是键名', () => {
+  assert.equal(SEC.fields.length, 1, '存个 key 不该先填一张表');
+  assert.equal(SEC.fields[0].key, 'value');
+  assert.equal(isSensitiveField(SEC, 'value'), true);
+  assert.equal(SEC.titleField, null, '键名就是条目名，不该再从某个字段推导');
+  assert.equal(SEC.titleLabel, '密钥名');
 });

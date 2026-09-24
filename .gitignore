@@ -15,3 +15,14 @@ seed/
 
 # agent 的工作笔记（含个人信息状态的描述），留在本机
 .workbuddy/
+.pdf
+
+# 用户放进项目目录的本地文件（截图 / 简历 / 表格…往往含 PII）绝不入库。
+# 只挡项目根，不影响 src/ 与 assets/ 下正常资源。
+/*.pdf
+/*.png
+/*.jpg
+/*.jpeg
+/*.docx
+/*.xlsx
+/*.zip

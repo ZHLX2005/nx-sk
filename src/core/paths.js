@@ -111,11 +111,17 @@ export function assertSafeName(name, what = '名称') {
   return s;
 }
 
-/** 字段 key：ASCII 标识符，便于 CLI 里 `--set name=值` 与 agent 编程。 */
+/**
+ * 字段 key。**允许中文**——字典是「已用字段的台账」，用户敲什么键就该存什么键
+ * （`--set 微信号=xxx` 之后 `values` 里就是 `微信号`，不用记一个英文别名）。
+ * 仍然挡掉空白、路径分隔符与 `..`：那些会让 CLI 与 URL 变难用。
+ */
 export function assertFieldKey(key) {
   const s = String(key ?? '').trim();
-  if (!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(s)) {
-    throw badInput(`字段 key 非法: ${JSON.stringify(key)}（字母开头，仅含字母数字下划线，最长 48）`);
+  if (!s) throw badInput('字段 key 不能为空');
+  if (s.length > 48) throw badInput(`字段 key 过长（${s.length} > 48）: ${s}`);
+  if (/[\s/\\]/.test(s) || s.includes('..')) {
+    throw badInput(`字段 key 非法: ${JSON.stringify(key)}（不允许空白、路径分隔符或 '..'；中文可以）`);
   }
   return s;
 }

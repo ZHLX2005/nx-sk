@@ -163,7 +163,7 @@ function pushFlag(raw, name, value, spec) {
 function parseArgs(action, tokens) {
   const flagSpecs = new Map(flagSpecsOf(action).map((s) => [s.name, s]));
   const argSpecs = argSpecsOf(action);
-  const raw = {};
+  const flags = {};
   const positional = [];
 
   for (let i = 0; i < tokens.length; i++) {
@@ -174,15 +174,15 @@ function parseArgs(action, tokens) {
       const name = eq >= 0 ? t.slice(2, eq) : t.slice(2);
       const spec = flagSpecs.get(name);
       if (!spec) throw badInput(`用法: ${usageOf(action)} —— 未知参数 --${name}`);
-      if (eq >= 0) { pushFlag(raw, name, t.slice(eq + 1), spec); continue; }
-      if (spec.type === 'boolean') { pushFlag(raw, name, true, spec); continue; }
+      if (eq >= 0) { pushFlag(flags, name, t.slice(eq + 1), spec); continue; }
+      if (spec.type === 'boolean') { pushFlag(flags, name, true, spec); continue; }
       const next = tokens[i + 1];
       if (next === undefined || next.startsWith('--')) {
         // 注意：`--depth` 无值时报错，不要静默转换——Number(true) 会变成「深度 1」这种另一个合法值
         throw badInput(`用法: ${usageOf(action)} —— 参数 --${name} 缺少取值`);
       }
       i++;
-      pushFlag(raw, name, next, spec);
+      pushFlag(flags, name, next, spec);
       continue;
     }
     if (t.startsWith('-') && t.length > 1) {
@@ -191,11 +191,14 @@ function parseArgs(action, tokens) {
     positional.push(t);
   }
 
-  for (let i = 0; i < positional.length && i < argSpecs.length; i++) raw[argSpecs[i].name] = positional[i];
   if (positional.length > argSpecs.length) {
     throw badInput(`用法: ${usageOf(action)} —— 多余的位置参数: ${positional.slice(argSpecs.length).join(' ')}`);
   }
-  return raw;
+  const raw = {};
+  for (let i = 0; i < positional.length; i++) raw[argSpecs[i].name] = positional[i];
+  // 显式 flag 覆盖位置参数：`key set K --value=<值>` 与 `key set K <值>` 必须等价，
+  // 而后者在值以 `-` 开头时会被当成 flag（那时只能走前者）。
+  return { ...raw, ...flags };
 }
 
 const STATUS_NOTE = {

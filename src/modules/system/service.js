@@ -2,7 +2,7 @@
 import fsp from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { APP_LABEL, APP_NAME, ENV_HOME, ENV_PASSPHRASE, ENV_STORE, VERSION, appHome, displayPath, storeFile } from '../../core/paths.js';
-import { loadStore, corruptNote, listSnapshots, storePathInUse } from '../../core/store.js';
+import { loadStore, corruptNote, listSnapshots, migrationNote, storePathInUse } from '../../core/store.js';
 import { vaultStatus } from '../../core/vault.js';
 import { templateSummaries } from '../../core/fields.js';
 import { blocked } from '../../core/errors.js';
@@ -44,6 +44,7 @@ export async function bootstrapInfo() {
     templates: templateSummaries(),
     snapshots: (await listSnapshots()).slice(0, 5),
     corrupt: corruptNote(),
+    migration: migrationNote(),
     commands,
   };
 }

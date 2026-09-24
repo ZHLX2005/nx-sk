@@ -29,6 +29,7 @@ export default function SettingsView() {
       exportFormat: form.exportFormat,
       includeSecretsInExport: !!form.includeSecretsInExport,
       defaultSection: form.defaultSection,
+      kvSection: form.kvSection,
     };
     const r = await api('/api/settings', { method: 'PATCH', body });
     toast('设置已保存');
@@ -120,6 +121,10 @@ export default function SettingsView() {
               <div className="fctrl"><input value={form.defaultSection} onChange={(e) => setForm({ ...form, defaultSection: e.target.value })} /></div>
             </div>
             <div className="field">
+              <div className="flabel"><span>密钥（KV）栏目</span><span className="fkey">key set/get/list/remove 作用在哪个单字段栏目</span></div>
+              <div className="fctrl"><input value={form.kvSection} onChange={(e) => setForm({ ...form, kvSection: e.target.value })} placeholder="secret" /></div>
+            </div>
+            <div className="field">
               <div className="flabel"><span>导出默认带明文密钥</span></div>
               <div className="fctrl">
                 <label className="inline">
@@ -150,6 +155,26 @@ export default function SettingsView() {
           )) : <Empty>还没有快照。</Empty>}
         </div>
       </div>
+
+      {boot?.migration ? (
+        <div className="card">
+          <div className="colhead">数据迁移</div>
+          <div className="colbody">
+            <div className="row">
+              <span className="desc">store 已从 v{boot.migration.from} 迁到 v{boot.migration.to}：密钥栏目字段 {boot.migration.fieldsBefore} → {boot.migration.fieldsAfter}，{boot.migration.entries} 条条目</span>
+            </div>
+            <div className="row">
+              <span className="desc">迁移前的原始文件</span>
+              <span className="acts"><Copyable className="mono" text={boot.migration.snapshotRaw || ''}>{boot.migration.snapshot}</Copyable></span>
+            </div>
+            {boot.migration.legacyValuesKept ? (
+              <div className="row">
+                <span className="desc">另保留了 {boot.migration.legacyValuesKept} 个旧字段的值（不再显示，但没删）</span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {boot?.corrupt ? (
         <div className="card">

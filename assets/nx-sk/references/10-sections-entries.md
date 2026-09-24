@@ -31,7 +31,7 @@ store.json（~/nx-sk/store.json 或 $NX_SK_STORE）
 - `remove` 目标不存在时**报 `NOT_FOUND`**（不静默成功），就是为了让「打错一个字」当场暴露。
 - `dump` 是「快速获得一个栏目的全部信息」的正解：字段字典 + 全部条目 + 每个条目的完整度与**未填清单**。
 
-内置模板：`job`（求职 / 个人信息，约 70 字段 / 9 分组）、`secret`（密钥，8 字段）。
+内置模板：`job`（求职 / 个人信息，约 70 字段 / 9 分组）、`secret`（密钥，**单字段 KV**——细节见 `20-secrets`）。
 
 ## 三、条目命令
 
@@ -51,7 +51,7 @@ store.json（~/nx-sk/store.json 或 $NX_SK_STORE）
 | `--set 字段=值` | 可重复。键**可用字段 key 或中文标签**。值按字段 type 强转（bool 认`是/否/true/false`；tags 用 `、` 或 `,` 分隔；number 认数字串） |
 | `--data <json>` / `--data @file.json` | 一次写多字段。`--data` 优先被 `--set` 覆盖 |
 | `--unset a,b` | 清空若干字段（**这才是清空的正确姿势**，不是 `--set a=`） |
-| `--allow-new-field` | 字段字典里没有这个键时，自动补一个 `text` 字段再写入 |
+| （已取消）`--allow-new-field` | 现在**默认就是自动登记**，不必再带这个 flag |
 | `--title` | 条目名。不传则取栏目的 `titleField`（求职栏目是 `name`/姓名） |
 | `--dry-run` | 试运行：返回 `wouldCreate` / `wouldChange`，不落盘 |
 | `--reveal` | 读命令专用：显示密文字段明文 |
@@ -89,14 +89,21 @@ nx-sk entry get 张三 --json
 
 ## 五、扩字段字典（不写代码）
 
+**最省事的做法：直接写。** 字典里没有的键会自动登记（键名就是它本身），类型按值推断
+（`是/否` → bool，数组 → tags，其余 → text）。
+
 ```bash
-# 加一个字段：立即生效，CLI 与面板都能填
+nx-sk entry update 张三 --set 期望行业=互联网 --set 技术博客=https://example.com
+```
+
+**刻意不推 number**：18 位身份证号这类长数字超过 2^53，推成数字会静默丢精度。
+
+需要给字段配上候选值 / 提示文案 / 密文标记时，再显式声明：
+
+```bash
 nx-sk section update job --add-field '{"key":"blog","label":"技术博客","type":"text","group":"contact","hint":"URL"}'
 
-# 或者边写边加（agent 省一步）
-nx-sk entry update 张三 --set 期望行业=互联网 --allow-new-field
-
-# 删字段：只影响字典，已填的值留在条目里
+# 删字段：只影响台账，已填的值留在条目里（不再显示 ≠ 删掉）
 nx-sk section update job --remove-field blog
 
 # 整体替换字典（少数场景）

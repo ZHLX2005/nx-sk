@@ -80,6 +80,28 @@ test('CRUD 路由的形状对得上语义', () => {
   }
 });
 
+test('key 系列是 entry 的语法糖，不构成第二套业务逻辑', () => {
+  const keys = ACTIONS.filter((a) => a.id.startsWith('key.'));
+  assert.deepEqual(keys.map((a) => a.id).sort(), ['key.get', 'key.list', 'key.remove', 'key.set']);
+
+  for (const a of keys) {
+    assert.ok(cliPathsOf(a).length, `${a.id} 缺 CLI 命令`);
+    assert.ok(a.http, `${a.id} 缺 HTTP 路由（面板调不到）`);
+    // 同模块 = 同一份 service 实现。搬到别的模块就等于「两个入口两条业务逻辑」，
+    // 而其中一条必然先腐坏。
+    assert.equal(a.module, 'entries', `${a.id} 必须和 entry 同模块`);
+  }
+
+  const http = (id) => ACTIONS.find((a) => a.id === id).http;
+  const hasParam = (p) => p.split('/').filter(Boolean).some((s) => s.startsWith(':'));
+  assert.equal(hasParam(http('key.list')[1]), false, 'key list 是集合路由');
+  for (const id of ['key.get', 'key.set', 'key.remove']) {
+    assert.ok(hasParam(http(id)[1]), `${id} 路由必须能定位到单个键`);
+  }
+  // PUT 而不是 POST：KV 的 SET 是幂等覆盖，方法用错会让 agent 无法从端点推断语义
+  assert.equal(http('key.set')[0], 'PUT');
+});
+
 test('非资源模块没有被硬套成 CRUD', () => {
   for (const m of MODULES.filter((x) => !x.resource)) {
     const verbs = m.actions.map((a) => a.id.split('.').slice(1).join('.'));
