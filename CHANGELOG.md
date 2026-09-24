@@ -24,6 +24,8 @@
 
 ### Added
 
+- **README 补「安装」节**：`npm link` 做成全局垫片（全局 node_modules 是指向项目的软链，
+  改代码即刻生效）、`skill install` 的两处目标目录、以及 `npm unlink -g nx-sk` 的回退方式。
 - **字段台账不再拦写入**：`--set 任意键=值` 一律能存，没见过的键自动登记
   （键名就是字段名，**中文也可以**；类型按值推断：`是/否` → bool、数组 → tags、其余 → text）。
   `--allow-new-field` 随之取消（它现在是默认行为）。

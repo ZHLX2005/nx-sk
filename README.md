@@ -9,6 +9,38 @@ nx-sk serve          # 打开面板（http://127.0.0.1:7866）
 
 ![结构](https://img.shields.io/badge/node-%3E%3D18.17-informational) ![license](https://img.shields.io/badge/license-MIT-informational)
 
+## 安装
+
+命令名就是包名。**推荐做成全局垫片**（全局 node_modules 里是指向本项目的软链，
+改代码立刻生效，不用重新安装）：
+
+```bash
+cd <本项目>
+pnpm install          # 只为构建面板；CLI 侧零依赖
+pnpm run build        # 产出 src/web/public，serve 才有面板可服务
+npm link              # → 全局多了 nx-sk / nx-sk.cmd / nx-sk.ps1
+nx-sk version         # 从任何目录都能跑
+nx-sk serve           # 打开面板
+```
+
+取消：`npm unlink -g nx-sk`（只删全局垫片，不动项目）。
+
+> 不想污染全局也行：`node bin/nx-sk.mjs <子命令>` 等价，或 `npx --no-install . <子命令>`。
+
+让 **agent 学会用它**（脚手架的分水岭命令，装到用户级 skill 目录）：
+
+```bash
+nx-sk skill install                                  # → ~/.claude/skills/nx-sk
+nx-sk skill install --to ~/.workbuddy/skills         # WorkBuddy 侧的 agent 也读得到
+nx-sk skill get nx-sk --json                         # 外部 agent 一键拿全上下文（四元）
+```
+
+`skill install` 是三态的：已是最新 → 跳过；内容不同 → 报冲突，要显式 `--force` 才覆盖。
+**改了 `assets/nx-sk/` 之后要重新 `nx-sk skill install --force`** ——
+装出去的是**副本**，不会跟着源码走；忘了重装，agent 手里就是旧版手册（而且没有任何断言会提醒你）。
+它**复制**而不是软链（这样装出来的 skill 不受项目目录移动影响）；想跟着源码走就自己
+`ln -s <项目>/assets/nx-sk ~/.claude/skills/nx-sk`。
+
 ## 它是什么
 
 一个「本机工具类」项目的标准骨架实现（server-cli-web）：**serve 驱动 CLI 与 Web，
@@ -16,8 +48,8 @@ CLI 与 API 同源，skill 驱动 agent**。落到具体功能上：
 
 | 栏目 | id | 内容 |
 | --- | --- | --- |
-| 求职 | `job` | 求职用的个人信息档案：9 个分组 / 75 个字段（姓名、学历、联系方式、求职意向、紧急联系人…） |
-| 密钥 | `secret` | 大模型 API Key 等凭据，值以 **AES-256-GCM** 密文落盘 |
+| 求职 | `job` | 求职用的个人信息档案：9 个分组 / 75 个字段（姓名、学历、联系方式、求职意向、紧急联系人…）。模板只是**建议清单**，`--set 任意键=值` 直接写 |
+| 密钥 | `secret` | 极简 KV：名称 → 值。落盘是 **AES-256-GCM** 密文，读出来默认是原文（`--mask` 才打码） |
 
 栏目不是写死的：字段字典是**数据**，加字段、加栏目都不用改代码。
 
