@@ -27,19 +27,32 @@ nx-sk serve           # 打开面板
 
 > 不想污染全局也行：`node bin/nx-sk.mjs <子命令>` 等价，或 `npx --no-install . <子命令>`。
 
-让 **agent 学会用它**（脚手架的分水岭命令，装到用户级 skill 目录）：
+### skill：用**软链垫片**（推荐）
+
+`skill install` 装出去的是**副本**，不会跟着源码走 —— 改了 `assets/nx-sk/` 就变旧版手册。
+日常开发应该用**软链**指向项目里的源，改完立刻生效、永远不会漂移：
 
 ```bash
-nx-sk skill install                                  # → ~/.claude/skills/nx-sk
-nx-sk skill install --to ~/.workbuddy/skills         # WorkBuddy 侧的 agent 也读得到
-nx-sk skill get nx-sk --json                         # 外部 agent 一键拿全上下文（四元）
+# Windows（cmd / 终端里，目录软链）
+mklink /D "%USERPROFILE%\.claude\skills\nx-sk"      "D:\a_js\js_proj\nx-sk\assets\nx-sk"
+mklink /D "%USERPROFILE%\.workbuddy\skills\nx-sk"   "D:\a_js\js_proj\nx-sk\assets\nx-sk"
+# Windows（Git Bash，需要原生软链）
+MSYS=winsymlinks:nativestrict ln -s "D:/a_js/js_proj/nx-sk/assets/nx-sk" "$HOME/.claude/skills/nx-sk"
+
+# macOS / Linux
+ln -s "$(pwd)/assets/nx-sk" "$HOME/.claude/skills/nx-sk"
+ln -s "$(pwd)/assets/nx-sk" "$HOME/.workbuddy/skills/nx-sk"
 ```
 
-`skill install` 是三态的：已是最新 → 跳过；内容不同 → 报冲突，要显式 `--force` 才覆盖。
-**改了 `assets/nx-sk/` 之后要重新 `nx-sk skill install --force`** ——
-装出去的是**副本**，不会跟着源码走；忘了重装，agent 手里就是旧版手册（而且没有任何断言会提醒你）。
-它**复制**而不是软链（这样装出来的 skill 不受项目目录移动影响）；想跟着源码走就自己
-`ln -s <项目>/assets/nx-sk ~/.claude/skills/nx-sk`。
+建好之后 `nx-sk skill install` 会变成 no-op（内容一致 → 跳过），因为目标就是源本身。
+
+> 软链建不出来？退回到复制式安装（适合分发给别人 / 跨机器，但**改完记得重装**）：
+>
+> ```bash
+> nx-sk skill install                           # → ~/.claude/skills/nx-sk（三态：安装/跳过/冲突）
+> nx-sk skill install --to ~/.workbuddy/skills  # WorkBuddy 侧的 agent 也读得到
+> nx-sk skill install --force                   # 改了 assets/nx-sk/ 之后必须重装，否则是旧版
+> nx-sk skill get nx-sk --json                  # 外部 agent 一键拿全上下文（四元：skillName/ref/content/contentBytes/install）
 
 ## 它是什么
 

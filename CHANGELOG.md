@@ -2,6 +2,35 @@
 
 本文件格式参考 [Keep a Changelog](https://keepachangelog.com/)，中文正文。
 
+## [Unreleased]
+
+### Added
+
+- **字段填写策略 `fill`：`normal` / `optional` / `avoid`** —— 有些格子填了反而减分
+  （应届生的「上一家公司」、政治面貌为「群众」时的「入党时间」），这次把这种判断做成**数据**。
+  - `optional`（不必填）与 `avoid`（不填）**既不计入完整度的分子、也不计入分母**。
+    完整度这个数字是用来导航「还该补什么」的，被一批主动跳过的字段长期压着就失效了。
+  - 它们不会被藏起来：`serializeEntry` 新增顶层 `excluded[]`，与 `missing[]` **并列**
+    （「主动跳过」和「还没填」是两件事）；`completeness` 新增 `excluded`（个数）与
+    `excludedFilled`（标了不填却仍然填了的个数，非 0 就说明策略该更新了）。
+    CLI 的 `entry get` / `entry list` 把两者分开报，面板在字段标签上打中性标签。
+  - 新增 `section update --fill <字段>=normal|optional|avoid`（可重复，label 或 key 都认；
+    改回照常填传 `normal`）。`entry fields` / `section dump` 的字段字典输出带上
+    `fill` 与 `fillLabel`。
+  - `validateFieldDef` 放行 `fill` —— 该函数是**白名单**，漏了会静默丢弃新属性，
+    后果是「用户设了不填、完整度照旧算它」，很难查。非法策略报错而非忽略；`normal` 是缺省、不落盘。
+  - **非破坏性**：没有任何字段带 `fill` 时，行为与之前完全一致，旧 store 无需迁移。
+
+### Fixed
+
+- **「面板无 emoji / 不使用原生弹窗」这条守卫覆盖不全**：它只 `readdir` 了
+  `src/web/frontend/` 的**直接子文件**，于是 `frontend/components/`（`fieldEditor.jsx`、`ui.jsx`）、
+  `App.jsx`、`main.jsx`、`api/` 全都没被扫到 —— 等于**面板规则不覆盖面板**；
+  `src/core/`、`bin/`、`scripts/` 同样漏了。改为递归收集并补齐这几处，
+  顺手清掉 `core/render.js`、`core/store.js` 里两处漏网的 emoji。
+  已按项目「改完规则必须反向测试」的要求验证：往原先扫不到的 `components/fieldEditor.jsx`
+  注入 emoji，测试如期变红，还原后恢复全绿。
+
 ## [0.2.0] - 2026-09-24
 
 ### Changed
@@ -25,7 +54,10 @@
 ### Added
 
 - **README 补「安装」节**：`npm link` 做成全局垫片（全局 node_modules 是指向项目的软链，
-  改代码即刻生效）、`skill install` 的两处目标目录、以及 `npm unlink -g nx-sk` 的回退方式。
+  改代码即刻生效）、skill 的**软链垫片**做法、以及 `npm unlink -g nx-sk` 的回退方式。
+- **skill 在本机改成软链**：`~/.claude/skills/nx-sk` 与 `~/.workbuddy/skills/nx-sk`
+  现在都软链到项目 `assets/nx-sk`（与 `server-cli-web-scaffold` 同一种做法）。
+  `skill install` 装的是**副本**，只在分发/跨机器时用；日常用软链才不会让 agent 拿到旧版手册。
 - **【破坏性】KV 栏目在面板里就是一张表**：`secret` 标了 `kv: true`，面板渲染成
   「名称 / 值」两列表格（改值即改、加行即加键、行内重命名、一键复制），
   **不再有**条目列表、字段表单、完整度百分比 —— 那些只对「一族同构条目」的栏目（求职）有意义。
