@@ -25,6 +25,26 @@ nx-sk serve           # 打开面板
 
 取消：`npm unlink -g nx-sk`（只删全局垫片，不动项目）。
 
+> **npm 的全局 prefix 不在你的 PATH 里怎么办**（用 Volta / nvm 管理 node 时很常见）：
+> `npm link` 会把垫片放进 npm 的 prefix 目录，而那个目录可能不在终端的 PATH 上，
+> 于是你敲 `nx-sk` 会 command not found —— 但某些 shell（比如被别的工具注入过 PATH 的）却能跑。
+> 这种情况自己做一个垫片，放进**你自己的 bin 目录**（确认它在 PATH 里）：
+>
+> ```sh
+> # ~/.local/bin/nx-sk（Git Bash / sh）
+> #!/bin/sh
+> MSYS_NO_PATHCONV=1; export MSYS_NO_PATHCONV   # 不开这个，MSYS 会把 /d/... 按当前盘符改写成 d:\d\...
+> exec node "<项目绝对路径>/bin/nx-sk.mjs" "$@"
+> ```
+>
+> ```bat
+> :: ~/.local/bin/nx-sk.cmd（cmd.exe / PowerShell）
+> @echo off
+> node "D:\a_js\js_proj\nx-sk\bin\nx-sk.mjs" %*
+> ```
+>
+> 别忘了 `chmod +x ~/.local/bin/nx-sk`。验证：`cd / && nx-sk version`。
+
 > 不想污染全局也行：`node bin/nx-sk.mjs <子命令>` 等价，或 `npx --no-install . <子命令>`。
 
 ### skill：用**软链垫片**（推荐）
