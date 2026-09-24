@@ -174,4 +174,5 @@ test('密钥模板是严格的 KV：一个字段 + 条目名就是键名', () =>
   assert.equal(isSensitiveField(SEC, 'value'), true);
   assert.equal(SEC.titleField, null, '键名就是条目名，不该再从某个字段推导');
   assert.equal(SEC.titleLabel, '密钥名');
+  assert.equal(SEC.kv, true, '密钥模板必须自带 kv 标记 —— 面板据此渲染 KV 表格而不是条目列表');
 });

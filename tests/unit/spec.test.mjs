@@ -116,7 +116,7 @@ test('seedSections：默认栏目字段字典非空且带分组', () => {
   assert.equal(job.titleField, 'name');
 });
 
-test('v1 → v2 迁移：密钥栏目缩成 KV，旧值不删，且先留原始快照', async () => {
+test('v1 → v3 迁移：密钥栏目缩成 KV 表，旧值不删，且先留原始快照', async () => {
   const fsp = await import('node:fs/promises');
   const { join } = await import('node:path');
   const dir = process.env.NX_SK_HOME;
@@ -144,20 +144,21 @@ test('v1 → v2 迁移：密钥栏目缩成 KV，旧值不删，且先留原始�
 
   const migrated = await loadStore(p);
   const sec = migrated.sections.find((x) => x.id === 'secret');
-  assert.equal(migrated.version, 2, '迁移后版本号必须落到 2，否则每次读盘都会重跑');
+  assert.equal(migrated.version, 3, '迁移后版本号必须落到当前版本，否则每次读盘都会重跑');
   assert.deepEqual(sec.fields.map((f) => f.key), ['value'], '字典缩成单字段 KV');
+  assert.equal(sec.kv, true, 'v3：栏目标上 kv 标记（面板据此渲染表格）');
   assert.equal(sec.titleField, null);
   assert.equal(migrated.entries[0].values.value, 'sk-old-123', 'keyValue 的值要搬到 value');
   assert.equal(migrated.entries[0].values.model, 'gpt-4o', '其它旧值**不能删**——不再显示 ≠ 删掉');
   assert.equal(migrated.entries[0].values.provider, 'OpenAI');
 
   const note = migrationNote();
-  assert.ok(note && note.from === 1 && note.to === 2, '迁移要留可展示的记录');
+  assert.ok(note && note.from === 1 && note.to === 3, '迁移要留可展示的记录（from → to 都要有）');
   const snap = await fsp.readFile(note.snapshotRaw, 'utf8');
   assert.equal(JSON.parse(snap).version, 1, '快照必须是**迁移前**的原始文件，否则退回也没用');
 
   const onDisk = JSON.parse(await fsp.readFile(p, 'utf8'));
-  assert.equal(onDisk.version, 2, '迁移要就地落盘（幂等靠这个）');
+  assert.equal(onDisk.version, 3, '迁移要就地落盘（幂等靠这个）');
 
   const before = (await fsp.readdir(join(dir, 'backup'))).length;
   await loadStore(p);
@@ -165,8 +166,51 @@ test('v1 → v2 迁移：密钥栏目缩成 KV，旧值不删，且先留原始�
   assert.equal(after, before, '第二次读盘不该再迁移、再留快照');
 });
 
-test('正规的 v2 store 不会被迁移触碰', () => {
+test('没有栏目可迁时不会瞎迁，版本号照常落到当前', () => {
   const s = normalize({ version: 2, settings: {}, sections: [], entries: [] });
   assert.equal(s._migration, undefined);
-  assert.equal(s.version, 2);
+  assert.equal(s.version, 3);
+});
+
+test('v2 → v3：误当字段用的键值搬进值列，多余字段收掉，旧键不删', () => {
+  // 复刻真实事故：面板那行「KV 直填」在密钥栏目里把 `3123312=xxx` 当成**新字段**登记了，
+  // 于是栏目字段变成 [value, 089, 3123312]，用户看到的是一堆无意义的「模板建议」。
+  const v2 = {
+    version: 2,
+    settings: { kvSection: 'secret' },
+    sections: [{
+      id: 'secret', title: '密钥', description: 'old', order: 20, template: 'secret',
+      titleField: null, titleLabel: '密钥名',
+      groups: [{ id: 'key', title: '密钥信息' }],
+      fields: [
+        { key: 'value', label: '密钥值', type: 'secret', group: 'key' },
+        { key: '089', label: '089', type: 'text', group: 'key' },
+        { key: '3123312', label: '3123312', type: 'text', group: 'key' },
+      ],
+    }],
+    entries: [
+      { id: 'e_a', section: 'secret', title: '3123', tags: [], values: { '3123312': 'sk-typed-here' } },
+      { id: 'e_b', section: 'secret', title: '3333', tags: [], values: {} },
+    ],
+  };
+  const s = normalize(v2);
+  const sec = s.sections.find((x) => x.id === 'secret');
+
+  assert.deepEqual(sec.fields.map((f) => f.key), ['value'], '字段收成一个值字段');
+  assert.equal(sec.kv, true, '标成 KV 表');
+  assert.equal(s.settings.kvSection, undefined, 'v3 起 kvSection 这个冗余设置被清掉');
+
+  const a = s.entries.find((e) => e.id === 'e_a');
+  assert.equal(a.values.value, 'sk-typed-here', '那个「字段值」其实是用户想存的值，搬进 value');
+  assert.equal(a.values['3123312'], 'sk-typed-here', '原键保留（不再显示 ≠ 删掉）');
+
+  const b = s.entries.find((e) => e.id === 'e_b');
+  assert.equal(b.values.value, undefined, '空条目不动 —— 迁移不凭空造值');
+});
+
+test('已经标了 kv 的栏目再读不会重复迁移', () => {
+  const base = { id: 'secret', title: '密钥', kv: true, fields: [{ key: 'value', label: '密钥值', type: 'secret', group: 'key' }], groups: [{ id: 'key', title: 'K' }] };
+  const s = normalize({ version: 3, settings: {}, sections: [base], entries: [] });
+  assert.equal(s._migration, undefined);
+  assert.equal(s.sections[0].kv, true);
 });

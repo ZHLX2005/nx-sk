@@ -3,12 +3,18 @@ import { api } from '../../web/frontend/api/client.js';
 import { useStore } from '../../web/frontend/store.jsx';
 import { CliHints, Empty, Modal, Tag } from '../../web/frontend/components/ui.jsx';
 import { FieldGroup } from '../../web/frontend/components/fieldEditor.jsx';
+import KvTable from './kvTable.jsx';
 
 const norm = (x) => (x === null || x === undefined ? '' : (Array.isArray(x) ? x.join('、') : String(x)));
 
 /**
- * 栏目详情视图：**一个视图服务所有栏目**（求职 / 密钥 / 以后新加的）。
- * 字段与分组全部来自后端的字段字典，所以新增字段不需要改前端。
+ * 栏目详情视图。按栏目的形状分两种布局：
+ *
+ * - `kv: true`（密钥那种）→ 交给 [[kvTable]]，**一行一个键值对**。没有条目列表、
+ *   没有字段表单、没有完整性——密钥就是一张表。
+ * - 其余栏目 → 模板建议的分组表单（求职那种需要中文标签/候选值/未填清单的场景）。
+ *
+ * 字段与分组全部来自后端，所以新增字段不需要改前端。
  */
 export default function SectionView({ sectionId }) {
   const { ui, patchUi, toast, guard, dialog, reload } = useStore();
@@ -128,6 +134,9 @@ export default function SectionView({ sectionId }) {
     );
   }
   if (!data) return <div className="pad muted">{busy ? '加载中…' : '暂无数据'}</div>;
+
+  // KV 栏目单独一套界面（宿主的 hooks 都已经跑完，这里是合法提前返回）
+  if (data.section.kv) return <KvTable sectionId={sectionId} sectionTitle={data.section.title} />;
 
   return (
     <>

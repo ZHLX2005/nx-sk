@@ -8,7 +8,7 @@
 import { loadStore, mutateStore, snapshotStore } from '../../core/store.js';
 import { assertFieldKey } from '../../core/paths.js';
 import { badInput, conflict, notFound } from '../../core/errors.js';
-import { BOOL_FALSE, BOOL_TRUE, findSection, isSensitiveField, sectionNames } from '../../core/fields.js';
+import { BOOL_FALSE, BOOL_TRUE, findKvSection, findSection, isSensitiveField, sectionNames } from '../../core/fields.js';
 import { completeness, displaySensitive, serializeEntry } from '../../core/render.js';
 import { newId, nowIso } from '../../core/ids.js';
 import { decryptValue, encryptValue, isCipherBlob, maskValue } from '../../core/crypto.js';
@@ -56,6 +56,17 @@ function resolveFieldDef(section, rawKey) {
  * key 直接用用户敲的那个词（中文也行）——**写什么就存什么**，不必再记一个英文别名。
  */
 function registerField(section, rawKey, rawValue) {
+  // KV 栏目**拒绝加字段**：它的形状就是「一行一个键值对」，多一个字段就散了。
+  // 这里必须报错而不是静默登记 —— 静默的后果是用户看到一堆无意义的字段名
+  // （真实事故：面板那行「KV 直填」把 `3123312=xxx` 登记成了字段，而不是一个新键）。
+  if (section.kv) {
+    const wanted = String(rawKey).trim();
+    throw badInput(
+      `栏目「${section.title}」是一张 KV 表（一行一个键值对），不能加字段「${wanted}」。`
+      + `你要加的应该是一个**键** —— 用 nx-sk key set ${wanted} <值>，`
+      + '或在面板的 KV 表格里加一行。',
+    );
+  }
   const key = assertFieldKey(String(rawKey).trim());
   const def = {
     key,
@@ -245,6 +256,13 @@ export async function updateEntry(ref, patch = {}) {
     };
   }
 
+  // 重名会让 `entry get <名字>` / `key get <名字>` 变成二义（只能靠 id 定位），
+  // 所以改名时挡一下：KV 表格改键名、agent 改条目标题都走这里。
+  if (patch.title !== undefined && String(patch.title) !== target.title) {
+    const dup = store.entries.find((e) => e.id !== target.id && e.section === target.section && e.title === String(patch.title));
+    if (dup) throw conflict(`同栏目下已有叫「${patch.title}」的了（${dup.id}）；先合并或删掉那一条。`);
+  }
+
   const snapshot = await snapshotStore(`entry-update-${target.id}`);
   await mutateStore((s) => {
     const e = s.entries.find((x) => x.id === target.id);
@@ -308,19 +326,24 @@ export async function fieldDictionary({ section } = {}) {
  * 「哪个栏目 + 哪个值字段」定好，再调 addEntry / updateEntry / removeEntry 本身。
  * 所以加解密、打码、快照、--dry-run 全部只有一份实现，不可能与 `entry` 命令分叉。
  */
-async function kvTarget(store) {
-  const wanted = store.settings.kvSection || 'secret';
-  const sec = findSection(store, wanted);
+/**
+ * 找 KV 表格：默认是**标了 `kv: true` 的栏目**（密钥模板自带），
+ * 也可以用 `--section` 指定任何一个「只有一个值字段」的栏目。
+ */
+async function kvTarget(store, ref) {
+  const sec = ref
+    ? findSection(store, ref)
+    : findKvSection(store);
   if (!sec) {
-    throw notFound(`KV 栏目不存在: ${wanted} —— 改指向别的栏目用 'nx-sk setting set --key kvSection --value <栏目id>'，`
-      + `或先建一个单字段栏目。现有: ${sectionNames(store)}`);
+    if (ref) throw notFound(`找不到栏目: ${ref} —— 现有: ${sectionNames(store)}`);
+    throw badInput('还没有 KV 栏目：用 `nx-sk section add keys --template secret` 建一个。'
+      + `现有栏目: ${sectionNames(store)}`);
   }
   const named = (sec.fields || []).find((x) => x.key === 'value');
   if (named) return { sec, valueKey: named.key };
   if (!sec.fields || !sec.fields.length) throw badInput(`栏目「${sec.title}」没有任何字段，不能当 KV 用`);
   if (sec.fields.length > 1) {
-    throw badInput(`栏目「${sec.title}」有 ${sec.fields.length} 个字段，不是 KV；`
-      + `把 settings.kvSection 指向单字段栏目，或给它加一个 key 叫 value 的字段。`);
+    throw badInput(`栏目「${sec.title}」有 ${sec.fields.length} 个字段，不是 KV（KV 表格只能有一个值字段）`);
   }
   return { sec, valueKey: sec.fields[0].key };
 }
@@ -336,9 +359,9 @@ function assertKeyName(name) {
   return s;
 }
 
-export async function keyList({ mask } = {}) {
+export async function keyList({ mask, section } = {}) {
   const store = await loadStore();
-  const { sec, valueKey } = await kvTarget(store);
+  const { sec, valueKey } = await kvTarget(store, section);
   const mine = store.entries.filter((e) => e.section === sec.id);
   const decrypt = await sensitiveViewer(sec, mine);
   return {
@@ -356,9 +379,9 @@ export async function keyList({ mask } = {}) {
   };
 }
 
-export async function keyGet(name, { mask } = {}) {
+export async function keyGet(name, { mask, section } = {}) {
   const store = await loadStore();
-  const { sec, valueKey } = await kvTarget(store);
+  const { sec, valueKey } = await kvTarget(store, section);
   const key = assertKeyName(name);
   const entry = store.entries.find((e) => e.section === sec.id && e.title === key);
   if (!entry) throw notFound(`没有这个密钥: ${key}（用 'nx-sk key list' 看现有的）`);
@@ -378,13 +401,13 @@ export async function keyGet(name, { mask } = {}) {
  * 这与 `entry add` 的「重名报 CONFLICT」是刻意不同的——`set` 这个名字本身就说明是覆盖，
  * 返回值里带 `created` 让调用方知道到底发生了哪一种。
  */
-export async function keySet(name, value, { 'dry-run': dryRun } = {}) {
+export async function keySet(name, value, { section, 'dry-run': dryRun } = {}) {
   const key = assertKeyName(name);
   const raw = value === undefined || value === null ? '' : String(value);
   if (!raw.trim()) throw badInput(`密钥值不能为空：nx-sk key set ${key} <值>`);
 
   const store = await loadStore();
-  const { sec, valueKey } = await kvTarget(store);
+  const { sec, valueKey } = await kvTarget(store, section);
 
   const existing = store.entries.find((e) => e.section === sec.id && e.title === key);
   if (existing) {
@@ -410,9 +433,9 @@ export async function keySet(name, value, { 'dry-run': dryRun } = {}) {
   return { status: 'ok', created: true, replaced: false, name: key, section: sec.id, id: r.id };
 }
 
-export async function keyRemove(name, { 'dry-run': dryRun } = {}) {
+export async function keyRemove(name, { section, 'dry-run': dryRun } = {}) {
   const store = await loadStore();
-  const { sec } = await kvTarget(store);
+  const { sec } = await kvTarget(store, section);
   const key = assertKeyName(name);
   const entry = store.entries.find((e) => e.section === sec.id && e.title === key);
   if (!entry) throw notFound(`没有这个密钥: ${key}`);

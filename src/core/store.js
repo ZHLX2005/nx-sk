@@ -7,8 +7,10 @@ import { ensureDir, pathExists, writeAtomic, writeJsonAtomic } from './fsx.js';
 import { instantiateTemplate, seedSections } from './fields.js';
 import { nowIso, stamp } from './ids.js';
 
-/** v2：密钥栏目从 8 字段模板改成单字段 KV（名称 → 值）。 */
-export const STORE_VERSION = 2;
+/** v2：密钥栏目从 8 字段模板改成单字段 KV（名称 → 值）。
+ *  v3：栏目有了 `kv` 标记——KV 栏目是一张表（面板渲染成表格，key 命令默认作用在它上面），
+ *      并去掉 `settings.kvSection` 这个冗余概念。 */
+export const STORE_VERSION = 3;
 export const MAX_SNAPSHOTS = 20;
 export const MAX_EXPORT_HISTORY = 30;
 
@@ -18,7 +20,6 @@ export function defaultSettings() {
     exportFormat: 'both', // json | md | both
     includeSecretsInExport: true, // 默认含明文：本机单人工具，自己看不拦自己
     defaultSection: 'job',
-    kvSection: 'secret', // `key` 系列命令作用在哪个栏目上
   };
 }
 
@@ -43,6 +44,7 @@ function normalizeSection(raw) {
     description: String(raw.description || ''),
     order: Number.isFinite(raw.order) ? raw.order : 50,
     template: raw.template ? String(raw.template) : null,
+    kv: raw.kv === true,
     titleField: raw.titleField ? String(raw.titleField) : null,
     titleLabel: String(raw.titleLabel || '名称'),
     groups: Array.isArray(raw.groups) ? raw.groups.map((g) => ({ id: String(g.id), title: String(g.title || g.id) })) : [],
@@ -114,15 +116,67 @@ function migrateSecretToKv(store) {
   };
 }
 
+/**
+ * v2 → v3：把「密钥」栏目标成 KV 表，并把误当字段用的键值搬进值列。
+ *
+ * 背景：面板早先那行「KV 直填」在 KV 栏目里也把 `089=xxx` 当成**新字段**登记了
+ * （字段名 = `089`），而用户的本意是「加一个新键」。这里把「唯一一个非空且不是 value
+ * 的字段值」搬进 value —— 该条目就变成「标题 = 键名，value = 值」的正常样子。
+ * 其余留在 values 里的键**一律不删**（不再显示 ≠ 删掉）。
+ */
+function migrateKvToTable(store, oldSettings) {
+  const marked = store.sections.filter((s) => s.kv);
+  const target = marked[0]
+    || store.sections.find((s) => s.id === String(oldSettings?.kvSection || 'secret'));
+  if (!target) return null;
+
+  const tpl = instantiateTemplate('secret', { id: target.id, title: target.title, order: target.order });
+  const fieldsBefore = target.fields.length;
+  const moved = [];
+
+  for (const e of store.entries.filter((x) => x.section === target.id)) {
+    const v = e.values || (e.values = {});
+    const valueEmpty = v.value === undefined || v.value === null || v.value === '';
+    if (!valueEmpty) continue;
+    const others = Object.keys(v).filter((k) => k !== 'value' && v[k] !== undefined && v[k] !== null && v[k] !== '');
+    if (others.length === 1) { v.value = v[others[0]]; moved.push(`${e.title}:${others[0]}`); }
+  }
+
+  target.kv = true;
+  target.fields = tpl.fields;
+  target.groups = tpl.groups;
+  target.titleField = tpl.titleField;
+  target.titleLabel = tpl.titleLabel;
+  target.template = 'secret';
+  target.description = tpl.description;
+  target.updatedAt = nowIso();
+
+  return {
+    section: target.id,
+    fieldsBefore,
+    fieldsAfter: tpl.fields.length,
+    movedValues: moved.length,
+    movedDetail: moved,
+  };
+}
+
 export function normalize(data) {
   if (!data || typeof data !== 'object') return emptyStore(true);
+  const oldVersion = Number(data.version || 1);
+  const rawSettings = data.settings && typeof data.settings === 'object' ? data.settings : {};
   const base = emptyStore(false);
   base.version = STORE_VERSION;
-  base.settings = { ...base.settings, ...(data.settings && typeof data.settings === 'object' ? data.settings : {}) };
+  base.settings = { ...base.settings, ...rawSettings };
+  // v3 起 kvSection 没了：哪个栏目是 KV，由栏目自己的 kv 标记说了算
+  delete base.settings.kvSection;
   base.sections = (Array.isArray(data.sections) ? data.sections : []).map(normalizeSection).filter(Boolean);
   base.entries = (Array.isArray(data.entries) ? data.entries : []).map(normalizeEntry).filter(Boolean);
   base.exports = Array.isArray(data.exports) ? data.exports.slice(0, MAX_EXPORT_HISTORY) : [];
-  if (Number(data.version || 1) < 2) base._migration = migrateSecretToKv(base);
+  if (oldVersion < 2) base._migration = migrateSecretToKv(base);
+  if (oldVersion < 3) {
+    const m = migrateKvToTable(base, rawSettings);
+    if (m) base._migration = { ...(base._migration || {}), ...m };
+  }
   return base;
 }
 

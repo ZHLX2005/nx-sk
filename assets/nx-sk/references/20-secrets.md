@@ -2,9 +2,16 @@
 
 > 归属 `nx-sk` skill 主文档。存/取大模型 API Key、排查「解不开」时读这篇。
 
-## 一、模型：就是一个 KV
+## 一、模型：一张 KV 表
 
-密钥栏目**刻意只有一个字段**。一条记录 = 一个键值对：
+密钥栏目标了 `kv: true` —— 它**就是一张表**，「一行一个键值对」：
+
+- **面板**：一张两列表格（名称 / 值），改值即改、加行即加键。没有「条目列表」、
+  没有字段表单、没有完整度百分比 —— 那些是「栏目 = 一族同构条目」才需要的，
+  密钥不是那种东西。
+- **CLI**：`key set/get/list/remove` 四条。
+
+表长这样（值以密文落盘，读写默认给原文）：
 
 | 键（条目名） | 值（唯一字段 `value`） |
 | --- | --- |
@@ -32,6 +39,9 @@ nx-sk key remove OPENAI_KEY                     # 删除（删前自动留快照
 | `key set <名称> <值>` | `PUT /api/keys/:name` | **SET 语义**：存在即覆盖 |
 | `key remove <名称>` | `DELETE /api/keys/:name` | 不存在报 `NOT_FOUND`；写前留快照 |
 
+四条都接受 `--section <栏目>`（HTTP 侧是 `?section=` 或 body 里的 `section`），
+缺省作用在**标了 `kv` 的那个栏目**上。
+
 ### 与 `entry` 的关系（重要）
 
 `key *` **不是第二套实现**，是 `entry *` 的语法糖：它把「哪个栏目 + 哪个值字段」定好，
@@ -45,11 +55,27 @@ nx-sk key set OPENAI_KEY sk-xxx
   ≡ nx-sk entry update OPENAI_KEY --set value=sk-xxx                            （覆盖时）
 ```
 
-作用在哪个栏目由 `settings.kvSection` 决定（默认 `secret`）。要换成自己的单字段栏目：
+作用在哪个栏目？**看栏目自己的 `kv` 标记**（不再有 `settings.kvSection` 这种间接层）：
 
 ```bash
-nx-sk setting set --key kvSection --value mykeys
+nx-sk section add mykeys --template secret   # 从密钥模板建，自带 kv: true
+nx-sk section update someid --kv             # 把现有栏目标成 KV 表（取消写 --kv=false）
+nx-sk section list                           # 列表里 KV 栏目带 [KV 表] 前缀
 ```
+
+### KV 栏目**不许加字段**
+
+它的形状就是「一行一个键值对」。往里塞字段会让「值在哪一列」变得不确定，
+所以直接报错：
+
+```
+栏目「密钥」是一张 KV 表（一行一个键值对），不能加字段「089」。
+你要加的应该是一个**键** —— 用 nx-sk key set 089 <值>，或在面板的 KV 表格里加一行。
+```
+
+> 这条是真实事故换来的：面板早先那行「KV 直填」在密钥栏目里把 `3123312=xxx` 当成了
+> **新字段**登记，于是栏目字段从 1 个变成 3 个，用户在界面上看到的是一堆无意义的
+> 「模板建议：089、3123312」。现在走 `key set` 才是唯一正确的加键方式。
 
 ### 两个刻意的语义差别
 

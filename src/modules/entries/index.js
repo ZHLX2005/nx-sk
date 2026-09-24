@@ -94,14 +94,17 @@ export default {
     },
 
     // —— 密钥 KV 直通命令 ——
-    // 作用在 settings.kvSection（默认 secret）指向的**单字段**栏目上。
+    // 作用在**标了 kv 的栏目**（密钥模板自带 kv: true）上，可以用 --section 指定别的。
     // 它们是同一套 service 函数的语法糖，不是第二份业务逻辑。
     {
       id: 'key.list',
       cli: ['key', 'list'],
       http: ['GET', '/api/keys'],
-      summary: '列出全部密钥（KV 栏目；值默认原文，要打码加 --mask）',
-      flags: { mask: { type: 'boolean' } },
+      summary: '列出全部密钥（值默认原文，要打码加 --mask）',
+      flags: {
+        mask: { type: 'boolean' },
+        section: { type: 'string', hint: '指定 KV 栏目，缺省用标了 kv 的那个' },
+      },
       run: (ctx) => service.keyList(ctx),
       render: (d) => service.renderKeyList(d),
     },
@@ -111,7 +114,10 @@ export default {
       http: ['GET', '/api/keys/:name'],
       summary: '取一个密钥的值（默认原文；投屏/截图时加 --mask 打码）',
       args: ['name'],
-      flags: { mask: { type: 'boolean' } },
+      flags: {
+        mask: { type: 'boolean' },
+        section: { type: 'string' },
+      },
       run: (ctx) => service.keyGet(ctx.name, ctx),
       render: (d) => service.renderKeyGet(d),
     },
@@ -123,6 +129,7 @@ export default {
       args: ['name', 'value'],
       flags: {
         value: { type: 'string', hint: '值的另一种给法（值以 - 开头时用 --value=<值>）' },
+        section: { type: 'string' },
         'dry-run': { type: 'boolean' },
       },
       run: (ctx) => service.keySet(ctx.name, ctx.value, ctx),
@@ -134,7 +141,10 @@ export default {
       http: ['DELETE', '/api/keys/:name'],
       summary: '删一个密钥。目标不存在报 NOT_FOUND；写前自动留快照',
       args: ['name'],
-      flags: { 'dry-run': { type: 'boolean' } },
+      flags: {
+        section: { type: 'string' },
+        'dry-run': { type: 'boolean' },
+      },
       run: (ctx) => service.keyRemove(ctx.name, ctx),
       render: (d) => service.renderKeyRemove(d),
     },

@@ -3,14 +3,13 @@
 import { loadStore, mutateStore, snapshotStore } from '../../core/store.js';
 import { badInput, notFound } from '../../core/errors.js';
 
-export const SETTING_KEYS = ['exportDir', 'exportFormat', 'includeSecretsInExport', 'defaultSection', 'kvSection'];
+export const SETTING_KEYS = ['exportDir', 'exportFormat', 'includeSecretsInExport', 'defaultSection'];
 
 const SCHEMA = {
   exportDir: { type: 'string', hint: '导出目录，留空 = ~/nx-sk/export' },
   exportFormat: { type: 'string', enum: ['json', 'md', 'both'], hint: '整体导出默认格式' },
   includeSecretsInExport: { type: 'boolean', hint: '整体导出是否默认带密钥明文（默认否）' },
   defaultSection: { type: 'string', hint: '默认栏目 id' },
-  kvSection: { type: 'string', hint: '`key` 系列命令作用在哪个栏目上（默认 secret）' },
 };
 
 export function settingsSchema() {

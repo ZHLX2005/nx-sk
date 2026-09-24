@@ -12,7 +12,7 @@ description: 本机个人资源管理器——栏目化存储个人信息（求�
 | 栏目 | id | 内容 |
 | --- | --- | --- |
 | 求职 | `job` | 求职用的个人信息档案（姓名/学历/求职意向…约 70 个字段） |
-| 密钥 | `secret` | **极简 KV：名称 → 密钥值**。值以 AES-256-GCM 密文落盘 |
+| 密钥 | `secret` | **一张 KV 表**（`kv: true`）：一行一个键值对。面板渲染成表格，值以 AES-256-GCM 密文落盘 |
 
 ## 核心不变量
 
@@ -59,8 +59,11 @@ nx-sk key list                            # 所有键（默认原文）
 nx-sk key remove OPENAI_KEY               # 删除，写前自动留快照
 ```
 
-`key *` 是 `entry *` 的**语法糖**（同模块、同一批 service 函数），作用在 `settings.kvSection`
-指向的单字段栏目上（默认 `secret`）。区别只有一个：`key set` 遇到同名是**覆盖**，`entry add` 是报 `CONFLICT`。
+`key *` 是 `entry *` 的**语法糖**（同模块、同一批 service 函数），缺省作用在标了 `kv` 的栏目上
+（`--section` 可指定）。区别只有一个：`key set` 遇到同名是**覆盖**，`entry add` 是报 `CONFLICT`。
+
+**KV 栏目不许加字段**：它的形状就是一行一个键值对。想加东西就用 `key set <名称> <值>`
+（在 KV 栏目里 `entry update --set 新键=值` 会被拒绝并告诉你该用哪条命令）。
 
 ## ref 路由表（按需加载）
 

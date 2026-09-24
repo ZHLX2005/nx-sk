@@ -28,6 +28,7 @@ function summarize(store, s) {
     description: s.description,
     order: s.order,
     template: s.template,
+    kv: s.kv === true,
     titleLabel: s.titleLabel,
     groups: s.groups.length,
     fields: s.fields.length,
@@ -99,7 +100,7 @@ export async function addSection({ id, title, template, description, order, fiel
     }
     draft = t;
   } else {
-    draft = { id: sid, title: title || sid, description: description || '', order: Number.isFinite(order) ? order : 50, template: null, titleField: null, titleLabel: '名称', groups: [], fields: [] };
+    draft = { id: sid, title: title || sid, description: description || '', order: Number.isFinite(order) ? order : 50, template: null, kv: false, titleField: null, titleLabel: '名称', groups: [], fields: [] };
   }
   if (Array.isArray(groups)) draft.groups = groups.map(validateGroupDef);
   if (Array.isArray(fields)) {
@@ -126,6 +127,8 @@ export async function updateSection(ref, patch = {}) {
   if (patch.description !== undefined) changes.description = String(patch.description);
   if (patch.order !== undefined) changes.order = Number(patch.order);
   if (patch.titleLabel !== undefined) changes.titleLabel = String(patch.titleLabel);
+  // 标记/取消「本栏目是一张 KV 表」。取消要显式写 `--kv=false`（boolean flag 的 `=` 形式）
+  if (patch.kv !== undefined) changes.kv = patch.kv === true;
   if (patch.titleField !== undefined) changes.titleField = patch.titleField ? assertFieldKey(patch.titleField) : null;
   if (patch.groups !== undefined) changes.groups = Array.isArray(patch.groups) ? patch.groups.map(validateGroupDef) : [];
   if (patch.fields !== undefined) {
@@ -221,7 +224,8 @@ export async function dump(ref, { mask } = {}) {
 export function renderSectionList(d) {
   const lines = [`${d.count} 个栏目 · 共 ${d.totalEntries} 条条目`];
   for (const s of d.sections) {
-    lines.push(`  ${s.id.padEnd(12)} ${s.title}　${s.entries} 条 / ${s.fields} 字段　${s.description}`);
+    const tag = s.kv ? '[KV 表] ' : '';
+    lines.push(`  ${s.id.padEnd(12)} ${s.title}　${tag}${s.entries} 条 / ${s.fields} 字段　${s.description}`);
   }
   lines.push('', '看某栏目全部信息: nx-sk section dump <id>');
   return lines.join('\n');

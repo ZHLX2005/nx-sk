@@ -29,7 +29,6 @@ export default function SettingsView() {
       exportFormat: form.exportFormat,
       includeSecretsInExport: !!form.includeSecretsInExport,
       defaultSection: form.defaultSection,
-      kvSection: form.kvSection,
     };
     const r = await api('/api/settings', { method: 'PATCH', body });
     toast('设置已保存');
@@ -114,10 +113,6 @@ export default function SettingsView() {
             <div className="field">
               <div className="flabel"><span>默认栏目</span><span className="fkey">CLI 未指定 --section 时的首选</span></div>
               <div className="fctrl"><input value={form.defaultSection} onChange={(e) => setForm({ ...form, defaultSection: e.target.value })} /></div>
-            </div>
-            <div className="field">
-              <div className="flabel"><span>密钥（KV）栏目</span><span className="fkey">key set/get/list/remove 作用在哪个单字段栏目</span></div>
-              <div className="fctrl"><input value={form.kvSection} onChange={(e) => setForm({ ...form, kvSection: e.target.value })} placeholder="secret" /></div>
             </div>
             <div className="field">
               <div className="flabel"><span>导出默认带明文密钥</span><span className="fkey">默认开；要分享出去时关掉</span></div>

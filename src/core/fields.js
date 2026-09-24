@@ -34,7 +34,7 @@ const JOB_FIELDS = [
   f('wechat', '微信号', 'text', 'contact', { hint: '即时通讯微信号' }),
   f('qq', 'QQ号', 'text', 'contact', { hint: 'QQ 号码' }),
   f('homepage', '个人主页/作品链接', 'text', 'contact', { hint: '个人主页、作品集或代码仓库链接' }),
-  f('postalCode', '邮政编码', 'text', 'contact', { hint: '现居住地邮编' }),
+  f('postalCode', '邮政编码', 'text', 'contact', { hint: '通讯地址邮编（家庭/收件地址，可与现居住地不同）' }),
 
   // —— 教育背景 ——
   f('education', '最高学历', 'select', 'education', { options: ['大专', '本科', '硕士', '博士', '其他'] }),
@@ -45,6 +45,7 @@ const JOB_FIELDS = [
   f('enrollDate', '入学时间', 'month', 'education'),
   f('graduateDate', '毕业时间', 'month', 'education'),
   f('englishLevel', '英语等级', 'select', 'education', { options: ['无', 'CET-3', 'CET-4', 'CET-6', '专业四级', '专业八级', '雅思', '托福'] }),
+  f('englishScore', '英语等级分数', 'number', 'education', { hint: '等级考试的具体分数，如 CET-4 492 / CET-6 425' }),
   f('gaokaoDate', '高考时间', 'month', 'education', { hint: '高考参加时间' }),
   f('gaokaoScore', '高考分数', 'number', 'education', { hint: '高考成绩' }),
   f('gaokaoSubjects', '高考科目', 'text', 'education', { hint: '高考选科组合' }),
@@ -135,7 +136,11 @@ const TEMPLATES = {
   secret: {
     id: 'secret',
     label: '密钥 / 凭据',
-    description: '极简 KV：名称 → 密钥值。值以密文落盘，只有在显式揭示或带 --with-secrets 导出时才出现明文。',
+    description: '极简 KV：名称 → 值。值以密文落盘，读出来是原文。',
+    // kv: true = 这个栏目**就是一张 KV 表**：条目名 = 键名，唯一那个字段 = 值。
+    // 面板据此渲染表格（而不是「条目列表 + 表单 + 完整性」那套）；
+    // key set/get/list/remove 默认作用在它上面。字段字典对它没有意义，只有一个 value。
+    kv: true,
     titleField: null,
     titleLabel: '密钥名',
     groups: [{ id: 'key', title: '密钥信息' }],
@@ -172,6 +177,7 @@ export function instantiateTemplate(templateId, overrides = {}) {
     description: overrides.description || t.description,
     order: Number.isFinite(overrides.order) ? overrides.order : 50,
     template: t.id,
+    kv: t.kv === true,
     titleField: overrides.titleField || t.titleField,
     titleLabel: overrides.titleLabel || t.titleLabel,
     groups: t.groups.map((g) => ({ ...g })),
@@ -232,4 +238,21 @@ export function findSection(store, ref) {
 export function sectionNames(store) {
   const names = (store?.sections || []).map((x) => `${x.id}（${x.title}）`).join('、');
   return names || '（还没有栏目）';
+}
+
+/**
+ * KV 栏目：`kv: true` 标记的栏目（密钥就是）。它是**一张表**，不是一族条目。
+ * `key set/get/list/remove` 默认作用在它上面；面板也据此切换成表格布局。
+ */
+export function findKvSection(store, ref) {
+  const all = (store?.sections || []).filter((s) => s.kv);
+  if (ref) {
+    const hit = findSection(store, ref);
+    return hit || null;
+  }
+  return all[0] || null;
+}
+
+export function kvSections(store) {
+  return (store?.sections || []).filter((s) => s.kv);
 }

@@ -132,6 +132,28 @@ const secFields = await cliJson(['entry', 'fields', '--section', 'secret']);
 step('密钥栏目是单字段 KV', secFields.sections[0].fields.length === 1 && secFields.sections[0].titleField === null,
   `${secFields.sections[0].fields.length} 个字段`);
 
+const secList = await cliJson(['section', 'list']);
+step('栏目带 kv 标记（面板据此渲染 KV 表格，不是条目列表）',
+  secList.sections.find((s) => s.id === 'secret')?.kv === true
+  && secList.sections.find((s) => s.id === 'job')?.kv === false);
+
+await cliJson(['key', 'set', 'KV_PROBE', 'sk-probe']);
+const kvProbe = await cliJson(['key', 'list']);
+step('key list 报出 KV 栏目名', kvProbe.section === 'secret');
+const bySection = await cliJson(['key', 'list', '--section', 'secret']);
+step('key list --section 可指定 KV 栏目', bySection.count === kvProbe.count);
+await cliJson(['key', 'remove', 'KV_PROBE']);
+
+const kvAddField = await cliError(['entry', 'update', 'KV_SHAPE_PROBE', '--set', '随便一个键=值']);
+step('不存在的键在 KV 栏目里也走 key set 语义（不会变成字段）',
+  kvAddField.code === 'NOT_FOUND');
+await cliJson(['key', 'set', 'KV_SHAPE_PROBE', 'v1']);
+const kvNoField = await cliError(['entry', 'update', 'KV_SHAPE_PROBE', '--set', '089=123']);
+step('KV 栏目拒绝加字段，并指出该用 key set', kvNoField.code === 'INVALID_INPUT' && kvNoField.error.includes('KV 表'));
+const stillOne = await cliJson(['entry', 'fields', '--section', 'secret']);
+step('拒绝之后字段数没变', stillOne.sections[0].fields.length === 1);
+await cliJson(['key', 'remove', 'KV_SHAPE_PROBE']);
+
 const set1 = await cliJson(['key', 'set', 'SMOKE_KEY', 'sk-smoke-1234567890abcdef']);
 step('key set 创建', set1.status === 'ok' && set1.created === true && set1.name === 'SMOKE_KEY');
 

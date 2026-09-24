@@ -68,7 +68,7 @@ export default {
       id: 'section.update',
       cli: ['section', 'update'],
       http: ['PATCH', '/api/sections/:ref'],
-      summary: '改栏目（PATCH 语义：只改传入项）。字段字典可用 add-field / remove-field / fields',
+      summary: '改栏目（PATCH 语义：只改传入项）。字段台账可用 add-field / remove-field / fields；--kv 标成 KV 表',
       args: ['ref'],
       flags: {
         title: { type: 'string' },
@@ -76,6 +76,7 @@ export default {
         order: { type: 'number' },
         titleField: { type: 'string', hint: '用哪个字段做条目名' },
         titleLabel: { type: 'string' },
+        kv: { type: 'boolean', hint: '标成 KV 表（密钥那种）；取消写 --kv=false' },
         fields: { type: 'json', hint: '整体替换字段字典' },
         groups: { type: 'json', hint: '整体替换分组' },
         'add-field': { type: 'json', hint: '{"key":"x","label":"X","type":"text"}，可重复' },

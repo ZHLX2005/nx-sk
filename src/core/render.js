@@ -95,6 +95,7 @@ export function dumpSection(section, entries, { mask = false, decrypt } = {}) {
       description: section.description,
       order: section.order,
       template: section.template,
+      kv: section.kv === true,
       titleField: section.titleField,
       titleLabel: section.titleLabel,
       fields: section.fields.length,
