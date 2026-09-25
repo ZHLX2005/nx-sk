@@ -86,7 +86,9 @@ const help = await cli(['help']);
 step('help 由声明生成且含模块分组', help.out.includes('entry') && help.out.includes('栏目'));
 
 const templates = await cliJson(['section', 'templates']);
-step('section templates 列出内置模板', templates.templates.map((t) => t.id).join() === 'job,secret');
+step('section templates 列出内置模板',
+  templates.templates.length === 5 && ['job', 'secret', 'projects', 'internships', 'campus'].every((id) => templates.templates.some((t) => t.id === id)),
+  `${templates.templates.length} 个模板`);
 
 const fields = await cliJson(['entry', 'fields', '--section', 'job']);
 const fieldKeys = new Set(fields.sections[0].fields.map((f) => f.key));
@@ -232,6 +234,21 @@ step('skill get 人类模式是三段拼接', skillHuman.out.startsWith('# === n
 
 const refEscape = await cliError(['skill', 'get', 'nx-sk', '../package.json']);
 step('skill get 拒绝路径穿越', refEscape.code === 'INVALID_INPUT');
+
+// 软链模式（shim）：目标是项目源码的软链，改完立刻生效；三态照旧
+const linkDir = join(home, 'skills-link');
+const linkDry = await cliJson(['skill', 'install', '--mode', 'symlink', '--to', linkDir, '--dry-run']);
+step('skill install --mode symlink --dry-run 只报计划', linkDry.status === 'skipped' && linkDry.wouldInstall?.mode === 'symlink');
+const link1 = await cliJson(['skill', 'install', '--mode', 'symlink', '--to', linkDir]);
+step('软链装上了（mode=symlink，指向项目源码）',
+  link1.status === 'ok' && link1.mode === 'symlink' && link1.target.endsWith('assets/nx-sk'), link1.path);
+const link2 = await cliJson(['skill', 'install', '--mode', 'symlink', '--to', linkDir]);
+step('软链幂等：已指向源就跳过（不静默改）', link2.status === 'ok' && link2.skipped === true && link2.mode === 'symlink');
+const linkFiles = await readFile(join(linkDir, 'nx-sk', 'SKILL.md'), 'utf8');
+step('软链能读到源的内容', linkFiles.includes('nx-sk'));
+const copyOntoLink = await cliJson(['skill', 'install', '--to', linkDir]);
+step('copy 模式遇到指向源的同款软链 → 已是最新（不重复装、不报错）',
+  copyOntoLink.status === 'ok' && copyOntoLink.skipped === true);
 
 const routes = await cliJson(['routes']);
 step('routes 与 help 覆盖同一批命令', routes.total === boot.counts.commands);

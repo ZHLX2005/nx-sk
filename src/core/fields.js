@@ -5,6 +5,32 @@
 
 export const FIELD_TYPES = ['text', 'textarea', 'number', 'date', 'month', 'bool', 'select', 'tags', 'secret'];
 
+/**
+ * 字段的**填写策略**——回答「这个字段值不值得填」，与 type 正交。
+ *
+ *   normal   照常填（默认；字段定义上不写 `fill` 就是它）
+ *   optional 不必填：填了不亏，但没填也不该被算成「缺失」
+ *   avoid    回避不填：填了可能反而减分（应届生的「上一家公司」、群众的「入党时间」）
+ *
+ * 后两者都**不计入完整度的分子与分母**。理由：完整度这个数字是用来导航
+ * 「还该补什么」的，如果一批自己决定不填的字段长期压着它，导航就废了。
+ * 被排除的字段不会消失——`completeness()` 会单独把它们列在 `excluded` 里。
+ */
+export const FILL_POLICIES = ['normal', 'optional', 'avoid'];
+
+export const FILL_LABELS = { normal: '照常填', optional: '不必填', avoid: '不填' };
+
+/** 取字段的填写策略，缺省与非法值都归到 `normal`（宽松读，旧数据不用迁移）。 */
+export function fillPolicy(def) {
+  const v = def && def.fill;
+  return FILL_POLICIES.includes(v) ? v : 'normal';
+}
+
+/** 是否被排除在完整度之外（optional / avoid 都是）。 */
+export function isExcludedField(def) {
+  return fillPolicy(def) !== 'normal';
+}
+
 export const BOOL_TRUE = ['是', 'true', '1', 'yes', 'y'];
 export const BOOL_FALSE = ['否', 'false', '0', 'no', 'n'];
 
@@ -52,9 +78,10 @@ const JOB_FIELDS = [
   f('isFreshGraduate', '是否应届生', 'bool', 'education'),
   f('isBaoyan', '是否保研', 'bool', 'education', { hint: '是否推荐免试攻读研究生' }),
   f('hasOverseasStudy', '是否有留学经历', 'bool', 'education'),
-  f('internships', '实习经历', 'textarea', 'education', { hint: '每行一条：单位（起止时间）- 岗位' }),
-  f('projects', '项目经历', 'textarea', 'education', { hint: '每行一条：项目名（起止时间）- 技术栈/职责' }),
   f('certificates', '技能证书', 'textarea', 'education', { hint: '每行一条证书或获奖' }),
+  // 实习/项目/校内职务不再放这里——它们各自是独立栏目（projects / internships / campus），
+  // 每个项目/一段经历一个条目，角色、时间、技术栈都是独立字段，不再挤 textarea。
+  f('skills', '专业技能', 'textarea', 'education', { hint: '每行一条：方向——具体技术点' }),
 
   // —— 户籍与居住 ——
   f('hukouPlace', '户口所在地', 'text', 'household', { hint: '省市' }),
@@ -113,6 +140,36 @@ const SECRET_FIELDS = [
   f('value', '密钥值', 'secret', 'key', { hint: 'API Key 本身。落盘是密文，读出来默认是原文（--mask 才打码）' }),
 ];
 
+// —— 经历类模板：一个项目 / 一段实习 / 一条职务 = 一个条目 ——
+// 为什么是独立栏目而不是 job 里的 textarea：经历天然是多字段、多条目的结构化数据，
+// 「每行一条」挤在一个格子里既没法填也没法按角色/时间取数。
+const PROJECT_FIELDS = [
+  f('name', '项目名称', 'text', 'main'),
+  f('role', '担任角色', 'text', 'main'),
+  f('period', '起止时间', 'text', 'main', { hint: '如 2025.05-2025.07' }),
+  f('company', '所属单位', 'text', 'main', { hint: '公司/学校/个人项目，没有就不填', fill: 'optional' }),
+  f('stack', '技术栈', 'textarea', 'main', { hint: '逗号分隔或每行一个' }),
+  f('summary', '项目简介', 'textarea', 'main'),
+  f('highlights', '职责与亮点', 'textarea', 'main', { hint: '每行一条' }),
+  f('link', '项目链接', 'text', 'main', { fill: 'optional' }),
+];
+
+const INTERNSHIP_FIELDS = [
+  f('company', '公司名称', 'text', 'main'),
+  f('role', '岗位', 'text', 'main'),
+  f('period', '起止时间', 'text', 'main', { hint: '如 2026.01-2026.04' }),
+  f('summary', '工作概述', 'textarea', 'main'),
+  f('duties', '工作内容', 'textarea', 'main', { hint: '每行一条' }),
+  f('stack', '技术栈', 'textarea', 'main', { hint: '逗号分隔或每行一个' }),
+];
+
+const CAMPUS_FIELDS = [
+  f('role', '职务名称', 'text', 'main'),
+  f('org', '所属组织', 'text', 'main', { fill: 'optional' }),
+  f('period', '起止时间', 'text', 'main', { fill: 'optional', hint: '如 2024.09-至今' }),
+  f('duties', '职责描述', 'textarea', 'main'),
+];
+
 const TEMPLATES = {
   job: {
     id: 'job',
@@ -145,6 +202,33 @@ const TEMPLATES = {
     titleLabel: '密钥名',
     groups: [{ id: 'key', title: '密钥信息' }],
     fields: SECRET_FIELDS,
+  },
+  projects: {
+    id: 'projects',
+    label: '项目经历',
+    description: '每个项目一个条目：名称、角色、时间、技术栈、职责与亮点。',
+    titleField: 'name',
+    titleLabel: '条目名',
+    groups: [{ id: 'main', title: '项目信息' }],
+    fields: PROJECT_FIELDS,
+  },
+  internships: {
+    id: 'internships',
+    label: '实习/工作经历',
+    description: '每段实习或工作一个条目：公司、岗位、时间、职责。',
+    titleField: 'company',
+    titleLabel: '条目名',
+    groups: [{ id: 'main', title: '经历信息' }],
+    fields: INTERNSHIP_FIELDS,
+  },
+  campus: {
+    id: 'campus',
+    label: '校内职务/实践',
+    description: '每条职务或实践一个条目：职务、组织、时间、职责。',
+    titleField: 'role',
+    titleLabel: '条目名',
+    groups: [{ id: 'main', title: '职务信息' }],
+    fields: CAMPUS_FIELDS,
   },
 };
 
@@ -191,6 +275,9 @@ export function instantiateTemplate(templateId, overrides = {}) {
 export function seedSections(stamp) {
   return [
     { ...instantiateTemplate('job', { id: 'job', title: '求职', order: 10 }), createdAt: stamp, updatedAt: stamp },
+    { ...instantiateTemplate('projects', { id: 'projects', title: '项目经历', order: 11 }), createdAt: stamp, updatedAt: stamp },
+    { ...instantiateTemplate('internships', { id: 'internships', title: '实习/工作经历', order: 12 }), createdAt: stamp, updatedAt: stamp },
+    { ...instantiateTemplate('campus', { id: 'campus', title: '校内职务/实践', order: 13 }), createdAt: stamp, updatedAt: stamp },
     { ...instantiateTemplate('secret', { id: 'secret', title: '密钥', order: 20 }), createdAt: stamp, updatedAt: stamp },
   ];
 }

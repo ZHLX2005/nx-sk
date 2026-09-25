@@ -21,10 +21,11 @@ export default {
       id: 'skill.install',
       cli: ['skill', 'install'],
       http: ['POST', '/api/skills/install'],
-      summary: '把内置 skill 装到 ~/.claude/skills（三态：安装 / 已最新 / 冲突需 --force）',
+      summary: '把内置 skill 装到 ~/.claude/skills（三态：安装 / 已最新 / 冲突需 --force）；--mode symlink 用软链挂过去，改完立刻生效',
       args: [{ name: 'name', required: false }],
       flags: {
         to: { type: 'string', hint: '安装目录，缺省 ~/.claude/skills' },
+        mode: { type: 'string', enum: ['copy', 'symlink'], hint: 'copy=装副本（默认，可分发）；symlink=软链回项目源码（本机开发，改完立刻生效）' },
         force: { type: 'boolean', hint: '目标存在且内容不同时覆盖' },
         'dry-run': { type: 'boolean' },
       },
@@ -39,6 +40,7 @@ export default {
       args: [{ name: 'name', required: false }, { name: 'ref', required: false }],
       flags: {
         to: { type: 'string' },
+        mode: { type: 'string', enum: ['copy', 'symlink'] },
         force: { type: 'boolean' },
         'dry-run': { type: 'boolean', hint: '只输出文档，不装到本机' },
       },

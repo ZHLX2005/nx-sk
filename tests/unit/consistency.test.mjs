@@ -250,15 +250,25 @@ test('eslint 的模块互依禁列覆盖所有兄弟模块（settings 是唯一�
 test('面板无 emoji、不使用浏览器原生弹窗', async () => {
   const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/u;
   const files = [];
+  // 递归收集。原先只 readdir 了 frontend/ 的**直接子文件**，于是
+  // frontend/components/（fieldEditor.jsx、ui.jsx）、App.jsx、main.jsx、api/ 全都没被扫到
+  // —— 那些正是面板的建构块，「面板规则不覆盖面板」。
+  // core/ 同样漏了，而 core/render.js 决定的就是面板与 CLI 的值形态。
+  const collect = async (dir, re) => {
+    for (const rel of await readdir(join(ROOT, dir), { recursive: true })) {
+      if (re.test(rel)) files.push(join(ROOT, dir, rel));
+    }
+  };
   for (const id of await listDirs('src/modules')) {
     for (const name of ['view.jsx', 'service.js', 'index.js']) {
       const p = join(ROOT, 'src/modules', id, name);
       if (await readIfExists(p)) files.push(p);
     }
   }
-  for (const f of await readdir(join(ROOT, 'src/web/frontend'), { withFileTypes: true })) {
-    if (f.isFile() && /\.(jsx|js|css)$/.test(f.name)) files.push(join(ROOT, 'src/web/frontend', f.name));
-  }
+  await collect('src/core', /\.js$/);
+  await collect('src/web/frontend', /\.(jsx|js|css)$/);
+  await collect('bin', /\.mjs$/);
+  await collect('scripts', /\.mjs$/);
   for (const p of files) {
     const src = await readFile(p, 'utf8');
     assert.ok(!EMOJI.test(src), `${p} 里有 emoji —— 等宽终端宽度不定、跨平台渲染不一，本项目全程不用`);

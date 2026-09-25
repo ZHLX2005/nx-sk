@@ -1,6 +1,6 @@
 {
   "name": "nx-sk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "nx-sk · 本机个人资源管理器（server-cli-web 骨架）：栏目化存储个人信息与大模型密钥，CLI 与 Web 同源，敏感字段密文落盘。",
   "type": "module",
   "bin": {
@@ -23,9 +23,11 @@
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "link:local": "node scripts/link-local.mjs",
+    "unlink:local": "node scripts/link-local.mjs --unlink",
     "dev:vite": "vite",
     "dev:serve": "node bin/nx-sk.mjs serve --no-open",
-    "build": "vite build",
+    "build": "vite build && node scripts/link-local.mjs --auto",
     "start": "pnpm run build && node bin/nx-sk.mjs serve",
     "lint": "eslint .",
     "test:unit": "node --test",

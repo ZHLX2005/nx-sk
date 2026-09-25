@@ -3,7 +3,7 @@
 import { loadStore, mutateStore, snapshotStore } from '../../core/store.js';
 import { assertFieldKey, assertSafeId } from '../../core/paths.js';
 import { badInput, blocked, conflict, notFound } from '../../core/errors.js';
-import { FIELD_TYPES, findSection, groupFields, instantiateTemplate, sectionNames, templateSummaries } from '../../core/fields.js';
+import { FILL_POLICIES, FIELD_TYPES, findSection, groupFields, instantiateTemplate, sectionNames, templateSummaries } from '../../core/fields.js';
 import { dumpSection, formatValue } from '../../core/render.js';
 import { sensitiveViewer } from '../../core/vault.js';
 import { nowIso } from '../../core/ids.js';
@@ -51,6 +51,15 @@ export function validateFieldDef(raw, { allowGroup } = {}) {
   if (Array.isArray(raw.options) && raw.options.length) def.options = raw.options.map(String);
   if (raw.sensitive === true) def.sensitive = true;
   if (Number.isFinite(raw.maxItems)) def.maxItems = raw.maxItems;
+  // 填写策略：**必须显式放行**。这个函数是白名单，没写在这里的键会被静默丢掉，
+  // 而「静默丢掉」在这里的后果是「用户设了不填、完整度照旧算它」——很难查。
+  if (raw.fill !== undefined) {
+    if (!FILL_POLICIES.includes(raw.fill)) {
+      throw badInput(`字段 ${key} 的 fill 非法: ${JSON.stringify(raw.fill)}（可用: ${FILL_POLICIES.join(' / ')}）`);
+    }
+    // 只有非 normal 才落盘：normal 是缺省值，写上去只是噪音，也会让「读」多一种形态
+    if (raw.fill !== 'normal') def.fill = raw.fill;
+  }
   return def;
 }
 
@@ -162,9 +171,44 @@ export async function updateSection(ref, patch = {}) {
     }
     changes.fields = nextFields;
   }
-  if (!Object.keys(changes).length) throw badInput('没有要修改的内容（可改 title / description / order / fields / groups / add-field / remove-field）');
+  // —— 填写策略：--fill 字段=normal|optional|avoid ——
+  // 放在 add/remove 之后，这样同一次调用里新加的字段也能顺手设策略。
+  // 注意必须**复制**再改：nextFields 里是与 store 共享同一批对象引用的，
+  // 就地改 def.fill 会在 snapshotStore() **之前**污染真实数据，快照就不再是「改动前」的了。
+  const fillMap = patch.fill;
+  const fillChanged = [];
+  if (fillMap !== undefined && fillMap !== null) {
+    if (typeof fillMap !== 'object' || Array.isArray(fillMap)) {
+      throw badInput('--fill 要用 字段=策略 的写法，例如 --fill 入党时间=avoid');
+    }
+    for (const [ref0, policyRaw] of Object.entries(fillMap)) {
+      const policy = String(policyRaw);
+      if (!FILL_POLICIES.includes(policy)) {
+        throw badInput(`--fill ${ref0} 的策略非法: ${JSON.stringify(policyRaw)}（可用: ${FILL_POLICIES.join(' / ')}）`);
+      }
+      const idx = nextFields.findIndex((x) => x.key === ref0 || x.label === ref0);
+      if (idx < 0) {
+        throw notFound(`字段不存在: ${ref0}（用 'nx-sk entry fields --section ${target.id}' 看现有字段）`);
+      }
+      const def = { ...nextFields[idx] };
+      if (policy === 'normal') {
+        if (def.fill === undefined) continue; // 已是缺省，不制造无意义的改动
+        delete def.fill;
+      } else {
+        if (def.fill === policy) continue;
+        def.fill = policy;
+      }
+      nextFields[idx] = def;
+      fillChanged.push(`${def.key}=${policy}`);
+      changes.fields = nextFields;
+    }
+  }
 
-  if (dryRun) return { status: 'skipped', dryRun: true, wouldChange: changes, added, removed };
+  if (!Object.keys(changes).length) {
+    throw badInput('没有要修改的内容（可改 title / description / order / fields / groups / add-field / remove-field / fill）');
+  }
+
+  if (dryRun) return { status: 'skipped', dryRun: true, wouldChange: changes, added, removed, fillChanged };
 
   const snapshot = await snapshotStore('section-update');
   await mutateStore((s) => {
@@ -174,7 +218,7 @@ export async function updateSection(ref, patch = {}) {
     s.sections.sort((a, b) => a.order - b.order);
   });
   const after = await loadStore();
-  return { status: 'ok', id: target.id, changed: Object.keys(changes), added, removed, section: summarize(after, mustFind(after, target.id)), snapshot };
+  return { status: 'ok', id: target.id, changed: Object.keys(changes), added, removed, fillChanged, section: summarize(after, mustFind(after, target.id)), snapshot };
 }
 
 /**
@@ -284,6 +328,10 @@ export function renderSectionChange(d) {
     return `已删除栏目 ${d.removed.id}（连带 ${d.removed.entries} 条条目）\n快照: ${d.snapshot}`;
   }
   if (d.created) return `已创建栏目 ${d.section.id} · ${d.section.title}（${d.section.fields} 字段）\n快照: ${d.snapshot}`;
-  const extra = [d.added?.length ? `新增字段 ${d.added.join(', ')}` : '', d.removed?.length ? `删除字段 ${d.removed.join(', ')}` : ''].filter(Boolean).join('；');
+  const extra = [
+    d.added?.length ? `新增字段 ${d.added.join(', ')}` : '',
+    d.removed?.length ? `删除字段 ${d.removed.join(', ')}` : '',
+    d.fillChanged?.length ? `填写策略 ${d.fillChanged.join(', ')}` : '',
+  ].filter(Boolean).join('；');
   return `已更新栏目 ${d.id}：${d.changed.join(', ')}${extra ? `\n${extra}` : ''}\n快照: ${d.snapshot}`;
 }

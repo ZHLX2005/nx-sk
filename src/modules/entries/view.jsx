@@ -219,6 +219,9 @@ export default function SectionView({ sectionId }) {
                 {current?.missing.length ? (
                   <span className="hint">模板建议里还有 {current.missing.length} 项没填（不影响使用）：{current.missing.slice(0, 5).map((m) => m.label).join('、')}{current.missing.length > 5 ? '…' : ''}</span>
                 ) : null}
+                {current?.excluded?.length ? (
+                  <span className="hint">另有 {current.excluded.length} 项已标不填、不计入完整度：{current.excluded.slice(0, 6).map((m) => m.label).join('、')}{current.excluded.length > 6 ? '…' : ''}</span>
+                ) : null}
               </div>
             </div>
           )}

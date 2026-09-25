@@ -481,14 +481,19 @@ export function renderEntryList(d) {
     lines.push(`  ${e.id}  ${(e.title || '（无名）').padEnd(16)} ${String(e.completeness.ratio).padStart(3)}% 完整度　[${e.section}]`);
     const missing = e.missing.slice(0, 6).map((m) => m.label).join('、');
     if (missing) lines.push(`      未填: ${missing}${e.missing.length > 6 ? ` 等 ${e.missing.length} 项` : ''}`);
+    if (e.completeness?.excluded) {
+      lines.push(`      不填: ${e.excluded.map((m) => m.label).join('、')}（主动跳过，不计入完整度）`);
+    }
   }
   lines.push('', '看全部字段: nx-sk entry get <id> --json　或　nx-sk entry fields --section <id>');
   return lines.join('\n');
 }
 
 export function renderEntryGet(d) {
+  const c = d.completeness || {};
   const lines = [
-    `${d.title || d.id}（${d.id}）· 栏目 ${d.section} · 完整度 ${d.completeness.filled}/${d.completeness.total} = ${d.completeness.ratio}%`
+    `${d.title || d.id}（${d.id}）· 栏目 ${d.section} · 完整度 ${c.filled}/${c.total} = ${c.ratio}%`
+    + (c.excluded ? ` · 另有 ${c.excluded} 项已标不填` : '')
     + `${d.mask ? ' · 已打码' : ''}`,
   ];
   for (const [k, v] of Object.entries(d.values)) {
@@ -497,6 +502,12 @@ export function renderEntryGet(d) {
   }
   if (d.missing.length) {
     lines.push('', `未填（${d.missing.length}）: ${d.missing.map((m) => `${m.label}(${m.key})`).join('、')}`);
+  }
+  // 「不填」和「未填」必须分开说：混在一起会让人以为这些字段还欠着，
+  // 而它们恰恰是用户主动决定跳过的。
+  if (d.excluded?.length) {
+    lines.push('', `不填（${d.excluded.length}）· 主动跳过、不计入完整度: `
+      + d.excluded.map((m) => `${m.label}(${m.key}｜${m.fillLabel || m.fill})`).join('、'));
   }
   return lines.join('\n');
 }

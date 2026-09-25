@@ -68,6 +68,9 @@ export function FieldGroup({ title, fields, draft, onPatch }) {
               <div className="flabel">
                 <span>{def.label}</span>
                 {def.sensitive ? <span className="tag bad">密文</span> : null}
+                {/* 填写策略来自后端字段字典；不计入完整度，所以标签用中性色而不是红色——
+                    用户是**主动**跳过它，不是出错。 */}
+                {def.fill && def.fill !== 'normal' ? <span className="tag">{def.fillLabel || def.fill}</span> : null}
                 <span className="fkey">{def.key}</span>
               </div>
               <div className="fctrl">

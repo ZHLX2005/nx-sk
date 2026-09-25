@@ -5,7 +5,7 @@ import fsp from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { ASSETS_DIR, SKILL_NAME, assertSafeName, displayPath } from '../../core/paths.js';
-import { copyTree, diffTrees, listFiles, pathExists, readFileText, removeTree } from '../../core/fsx.js';
+import { copyTree, diffTrees, ensureDir, listFiles, pathExists, readFileText, removeTree } from '../../core/fsx.js';
 import { badInput, notFound } from '../../core/errors.js';
 
 export const DEFAULT_SKILLS_DIR = join(homedir(), '.claude', 'skills');
@@ -42,12 +42,23 @@ async function resolveSkillSource(name) {
   return { name: n, src };
 }
 
-/** 三态安装，**不静默覆盖**用户目录里的东西。 */
-export async function installSkill({ name, to, force, 'dry-run': dryRun } = {}) {
+/**
+ * 三态安装，**不静默覆盖**用户目录里的东西。
+ *
+ * 两种模式（骨架 ref 的 `--mode <symlink|copy>`）：
+ * - `copy`（默认，**规范默认**）：把 `assets/<name>` 复制过去。装出来的是副本，
+ *   不受项目目录移动影响，适合 `npx` 分发到别人机器上；代价是改了 `assets/` 不会跟着走。
+ * - `symlink`：把目标**软链**到项目里的源 —— 这就是「shim 到全局」。改代码立刻生效、
+ *   永不漂移，适合本机开发（用户目录里那些 skill 本来就是这么挂的）。
+ */
+export async function installSkill({ name, to, force, mode, 'dry-run': dryRun } = {}) {
   const { name: n, src } = await resolveSkillSource(name);
   const dst = join(resolve(to || DEFAULT_SKILLS_DIR), n);
-  const files = await diffTrees(src, dst);
+  const wantsLink = mode === 'symlink';
 
+  if (wantsLink) return installAsLink({ src, dst, force, dryRun });
+
+  const files = await diffTrees(src, dst);
   if (!files.length) return { status: 'ok', skipped: true, path: displayPath(dst), pathRaw: dst, files: 0 };
 
   const exists = await pathExists(dst);
@@ -64,6 +75,42 @@ export async function installSkill({ name, to, force, 'dry-run': dryRun } = {}) 
   if (exists) await removeTree(dst);
   await copyTree(src, dst);
   return { status: 'ok', installed: !exists, replaced: exists, path: displayPath(dst), pathRaw: dst, files: files.length };
+}
+
+/** 软链模式：目标是项目里的源，改完立刻生效。三态照旧（不静默覆盖）。 */
+async function installAsLink({ src, dst, force, dryRun }) {
+  const st = await fsp.lstat(dst).catch(() => null);
+  const pointsAtSrc = st && st.isSymbolicLink() && resolve(await fsp.realpath(dst).catch(() => '')) === resolve(src);
+
+  if (pointsAtSrc) {
+    return {
+      status: 'ok', skipped: true, mode: 'symlink', files: 0,
+      path: displayPath(dst), pathRaw: dst, target: displayPath(src),
+    };
+  }
+
+  const kind = st ? (st.isSymbolicLink() ? '软链（指向别处）' : '真实目录') : null;
+  if (st && !force) {
+    return {
+      status: 'conflict', mode: 'symlink', path: displayPath(dst), pathRaw: dst,
+      existing: kind, target: displayPath(src),
+      hint: `目标已存在（${kind}）。改成软链会动它，确认就加 --force。`,
+    };
+  }
+  if (dryRun) {
+    return {
+      status: 'skipped', dryRun: true, wouldInstall: { mode: 'symlink', path: displayPath(dst), target: displayPath(src), replaced: !!st },
+    };
+  }
+
+  if (st) await removeTree(dst);
+  await ensureDir(join(dst, '..'));   // symlink 不会自建父目录（copyTree 会），不补这步就 ENOENT
+  // Windows 上用 junction：目录软链需要特权（或开发者模式），junction 不需要。
+  await fsp.symlink(src, dst, process.platform === 'win32' ? 'junction' : 'dir');
+  return {
+    status: 'ok', mode: 'symlink', installed: !st, replaced: !!st, files: 0,
+    path: displayPath(dst), pathRaw: dst, target: displayPath(src),
+  };
 }
 
 /**
@@ -94,13 +141,13 @@ export async function resolveRef(name, ref) {
   throw badInput(`未知 ref: ${raw}（可用: ${refs.join(', ') || '（无）'}；也可直接写 references/xxx.md）`);
 }
 
-export async function getSkill({ name, ref, to, force, 'dry-run': dryRun } = {}) {
+export async function getSkill({ name, ref, to, force, mode, 'dry-run': dryRun } = {}) {
   const { name: n } = await resolveSkillSource(name);
   const { rel, abs } = await resolveRef(n, ref);
   const content = await readFileText(abs);
   // `skill get` 永远给文档——哪怕目标是 conflict 状态，文档也照常输出。
   // 「目标端有 diff」是用户的决策范畴，不是 agent 的中止信号。
-  const install = await installSkill({ name: n, to, force, 'dry-run': dryRun });
+  const install = await installSkill({ name: n, to, force, mode, 'dry-run': dryRun });
   return {
     skillName: n,
     ref: rel,
@@ -131,8 +178,12 @@ export function renderSkillContext(d) {
 export function renderInstall(r) {
   if (!r) return '（未知）';
   if (r.status === 'skipped' && r.dryRun) return `试运行：将装到 ${r.wouldInstall.path}（${r.wouldInstall.files} 个文件，替换已有: ${r.wouldInstall.replaced ? '是' : '否'}）`;
-  if (r.skipped) return `已是最新: ${r.path}（与内置内容一致，无差异）`;
+  if (r.skipped) return `已是最新: ${r.path}${r.mode === 'symlink' ? `（已软链到 ${r.target}）` : '（与内置内容一致，无差异）'}`;
+  if (r.status === 'conflict' && r.mode === 'symlink') {
+    return `冲突: ${r.path} 已存在（${r.existing}）。改软链会动它，确认：nx-sk skill install ${SKILL_NAME} --mode symlink --force`;
+  }
   if (r.status === 'conflict') return `冲突: ${r.path} 已存在且内容不同（${r.count} 个文件有差异）。确认覆盖：nx-sk skill install ${SKILL_NAME} --force`;
+  if (r.mode === 'symlink') return `已软链: ${r.path} → ${r.target}（改项目里的源码立刻生效）`;
   if (r.installed) return `已安装: ${r.path}（${r.files} 个文件）`;
   if (r.replaced) return `已替换: ${r.path}（${r.files} 个文件）`;
   return `完成: ${r.path}`;

@@ -28,7 +28,7 @@ function emptyStore(seed) {
   return {
     version: STORE_VERSION,
     settings: defaultSettings(),
-    // ⚠️ 只有「store 文件压根不存在」才播种。文件在、但 sections 为空
+    // 只有「store 文件压根不存在」才播种。文件在、但 sections 为空
     // 说明用户自己删光了栏目——这时候再播种会把它变回来，等于删不掉。
     sections: seed ? seedSections(at) : [],
     entries: [],

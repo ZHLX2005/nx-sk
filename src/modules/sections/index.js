@@ -68,7 +68,7 @@ export default {
       id: 'section.update',
       cli: ['section', 'update'],
       http: ['PATCH', '/api/sections/:ref'],
-      summary: '改栏目（PATCH 语义：只改传入项）。字段台账可用 add-field / remove-field / fields；--kv 标成 KV 表',
+      summary: '改栏目（PATCH 语义：只改传入项）。字段台账可用 add-field / remove-field / fields / fill；--kv 标成 KV 表',
       args: ['ref'],
       flags: {
         title: { type: 'string' },
@@ -80,7 +80,8 @@ export default {
         fields: { type: 'json', hint: '整体替换字段字典' },
         groups: { type: 'json', hint: '整体替换分组' },
         'add-field': { type: 'json', hint: '{"key":"x","label":"X","type":"text"}，可重复' },
-        'remove-field': { type: 'array', hint: '字段 key，逗号分隔' },
+        'remove-field': { type: 'array', hint: '字段 key，可重复传（一次删一个）' },
+        fill: { type: 'kv', hint: '字段=normal|optional|avoid，可重复。optional 不必填、avoid 填了可能减分，两者都不计入完整度；改回照常填传 normal' },
         'dry-run': { type: 'boolean' },
       },
       run: (ctx) => service.updateSection(ctx.ref, ctx),

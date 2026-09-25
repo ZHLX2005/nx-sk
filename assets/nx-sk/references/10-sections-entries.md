@@ -22,7 +22,7 @@ store.json（~/nx-sk/store.json 或 $NX_SK_STORE）
 | 列表 | `nx-sk section list` | `GET /api/sections` |
 | 单条 | `nx-sk section get <id或标题>` | `GET /api/sections/:ref` |
 | 新增 | `nx-sk section add <id> --title <标题> --template job` | `POST /api/sections` |
-| 修改 | `nx-sk section update <id> [--title …] [--add-field '{…}'] [--remove-field a,b]` | `PATCH /api/sections/:ref` |
+| 修改 | `nx-sk section update <id> [--title …] [--add-field '{…}'] [--remove-field a --remove-field b]` | `PATCH /api/sections/:ref` |
 | 删除 | `nx-sk section remove <id> [--force]` | `DELETE /api/sections/:ref` |
 | **全量** | `nx-sk section dump <id> [--mask]` | `GET /api/sections/:ref/dump` |
 | 模板 | `nx-sk section templates` | `GET /api/sections/templates` |
@@ -111,9 +111,47 @@ nx-sk section update job --fields @fields.json
 ```
 
 字段定义支持：`key`（字母开头）、`label`、`type`（`text|textarea|number|date|month|bool|select|tags|secret`）、
-`group`、`hint`、`options`（候选项）、`sensitive`（true 则密文落盘）、`maxItems`（tags 上限）。
+`group`、`hint`、`options`（候选项）、`sensitive`（true 则密文落盘）、`maxItems`（tags 上限）、
+`fill`（填写策略，见下）。
 
 > `select` 的 `options` 是**候选项不是白名单**：真实值（如某个少数民族）不在候选里也允许写入。
+
+### 填写策略 `fill`：有些格子填了反而减分
+
+不是每个格子都值得填。应届生的「上一家公司」、政治面貌为「群众」时的「入党时间」——
+填上去不是补充，是噪音。`fill` 把这种判断**变成字段字典里的数据**，不用每次靠人记：
+
+| 值 | 含义 | 计入完整度 |
+| --- | --- | --- |
+| `normal` | 照常填（**默认**——字段上不写 `fill` 就是它） | 是 |
+| `optional` | 不必填：填了不亏，没填也不算「缺失」 | 否 |
+| `avoid` | 不填：填了可能反而减分 | 否 |
+
+```bash
+# 一次标几个，可重复；label 或 key 都认
+nx-sk section update job --fill 入党时间=avoid --fill 上一家公司=avoid --fill 兴趣爱好=optional
+
+# 改回照常填
+nx-sk section update job --fill 入党时间=normal
+```
+
+被排除的字段**既不计入分子也不计入分母**，所以完整度反映的是「你真正该填的那些」。
+但它们不会被藏起来——`missing`（欠着的）和 `excluded`（主动跳过的）是分开报的：
+
+```bash
+nx-sk entry get 张三
+#   张三（e_…）· 栏目 job · 完整度 8/9 = 89% · 另有 3 项已标不填
+#   未填（1）: 高考科目(gaokaoSubjects)
+#   不填（3）· 主动跳过、不计入完整度: 入党时间(partyJoinDate｜不填)、…
+```
+
+`--json` 里对应 `completeness.excluded`（个数）、`completeness.excludedFilled`
+（标了不填却仍然填了的个数——非 0 就说明策略该更新了）、以及顶层的 `excluded[]` 数组。
+`entry fields` / `section dump` 的字段字典会带上 `fill` 与 `fillLabel`，面板据此打标签。
+
+> **给 agent 的三条**：① `fill: 'avoid'` 的字段**不要主动填**，`optional` 可填可跳过；
+> ② 两者都**不要**出现在「还缺什么」的清单里；③ 用户说「这个不用填」时，
+> 用 `--fill <字段>=avoid` 记下来，而不是靠下一轮上下文记住。
 
 ## 六、Web 面板
 

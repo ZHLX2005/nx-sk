@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-25
+
 ### Added
 
 - **字段填写策略 `fill`：`normal` / `optional` / `avoid`** —— 有些格子填了反而减分
