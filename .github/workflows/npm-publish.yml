@@ -41,7 +41,13 @@ jobs:
 
       - name: 已存在则跳过（幂等）
         id: check
+        # if: 表达式里**不能用 secrets 上下文**（解析期直接报
+        # "Unrecognized named-value: 'secrets'"，整个 run 0 秒失败）——
+        # 判定 token 在不在必须经 env 间接传进 run 块
+        env:
+          HAS_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
         run: |
+          echo "hasToken=$HAS_TOKEN" >> $GITHUB_OUTPUT
           if git rev-parse "${{ steps.pkg.outputs.tag }}" >/dev/null 2>&1; then
             echo "tag_exists=true" >> $GITHUB_OUTPUT
           else
@@ -52,11 +58,9 @@ jobs:
           else
             echo "published=false" >> $GITHUB_OUTPUT
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: 缺 NPM_TOKEN 时明确提示（而不是静默失败）
-        if: steps.check.outputs.published == 'false' && secrets.NPM_TOKEN == ''
+        if: steps.check.outputs.published == 'false' && steps.check.outputs.hasToken == 'false'
         run: |
           echo "::warning::仓库缺少 NPM_TOKEN，已跳过发布。"
           echo "补上：gh secret set NPM_TOKEN --body <Automation Token>"
@@ -71,7 +75,7 @@ jobs:
           git push origin "${{ steps.pkg.outputs.tag }}"
 
       - name: 发布
-        if: steps.check.outputs.published == 'false' && secrets.NPM_TOKEN != ''
+        if: steps.check.outputs.published == 'false' && steps.check.outputs.hasToken == 'true'
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
